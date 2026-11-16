@@ -1,0 +1,1669 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Bản đồ tri thức kiểu Obsidian: graph liên kết, cụm ý tưởng, đường nối giữa hai ghi chú, phát lại quá trình phát triển.">
+<title>Synapse Vault</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: console dashboard. Header strip, graph stage + inspector column, four analysis panels below. Single committed dark look. */
+:root{
+  color-scheme: dark;
+  --bg:#080b11;
+  --stage:#06080d;
+  --panel:#0d1119;
+  --panel-2:#131926;
+  --line:#1f2737;
+  --line-2:#2c3649;
+  --text:#e4e8f1;
+  --muted:#8b94a8;
+  --faint:#566078;
+  --ivory:#f6efd9;          /* selection / path accent */
+  --violet:#a99bff;
+  --teal:#3fd0c0;
+  --ok:#7ee08a; --warn:#f2c14e; --bad:#ff7f8f;
+  --f-ui:"Be Vietnam Pro", system-ui, "Segoe UI", Roboto, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --r:6px;
+}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--text)}
+body{font-family:var(--f-ui);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--ivory);outline-offset:2px}
+
+.app{max-width:1680px;margin:0 auto;display:grid;gap:14px;
+  padding-block:16px 28px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));}
+
+/* ---------- header ---------- */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px;padding:12px 16px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r)}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand svg{flex:none}
+.brand h1{font-size:17px;font-weight:700;letter-spacing:.01em;margin:0;line-height:1.2}
+.brand p{margin:0;font-family:var(--f-mono);font-size:11.5px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip-sample{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);padding:1px 6px;border-radius:3px}
+.chip-sample.mine{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent)}
+.stats{display:flex;flex-wrap:wrap;gap:4px 22px;margin-right:auto}
+.stat{display:grid;gap:0}
+.stat b{font-family:var(--f-mono);font-weight:500;font-size:19px;font-variant-numeric:tabular-nums;line-height:1.25}
+.stat span{font-size:10.5px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-family:var(--f-mono)}
+.stat.warn b{color:var(--warn)} .stat.bad b{color:var(--bad)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.search{position:relative}
+.search input{width:240px;max-width:100%;background:var(--stage);border:1px solid var(--line-2);border-radius:4px;padding:7px 10px 7px 30px;font-size:13px}
+.search input::placeholder{color:var(--faint)}
+.search svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none}
+.search .count{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:var(--f-mono);font-size:11px;color:var(--muted);pointer-events:none}
+
+.btn{display:inline-flex;align-items:center;gap:6px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:4px;padding:6px 10px;font-family:var(--f-mono);font-size:12px;cursor:pointer;white-space:nowrap;transition:border-color .15s, background .15s}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--ivory);color:#14110a;border-color:var(--ivory);font-weight:600}
+.btn.primary:hover{background:#fff8e6}
+.btn.ghost{background:transparent}
+.btn[aria-pressed="true"]{border-color:var(--ivory);color:var(--ivory)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* ---------- panels ---------- */
+.panel{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);min-width:0;display:flex;flex-direction:column}
+.panel::before,.panel::after{content:"";position:absolute;width:9px;height:9px;pointer-events:none}
+.panel::before{top:-1px;left:-1px;border-top:1px solid var(--muted);border-left:1px solid var(--muted);border-top-left-radius:var(--r)}
+.panel::after{bottom:-1px;right:-1px;border-bottom:1px solid var(--muted);border-right:1px solid var(--muted);border-bottom-right-radius:var(--r)}
+.phead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;border-bottom:1px solid var(--line);min-height:44px}
+.plabel{font-family:var(--f-mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+.plabel i{width:7px;height:7px;border-radius:1px;background:var(--c,var(--violet));display:inline-block}
+.phead .sp{margin-left:auto}
+.pmeta{font-family:var(--f-mono);font-size:11px;color:var(--faint)}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:4px;overflow:hidden}
+.seg button{background:transparent;border:0;padding:4px 9px;font-family:var(--f-mono);font-size:11.5px;color:var(--muted);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-2)}
+.seg button[aria-pressed="true"]{background:var(--panel-2);color:var(--text)}
+select.mini{background:var(--panel-2);border:1px solid var(--line-2);border-radius:4px;font-family:var(--f-mono);font-size:11.5px;padding:3px 6px}
+
+.main{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:14px}
+.stage{position:relative;height:clamp(440px,70vh,780px);background:var(--stage);overflow:hidden;touch-action:none}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}
+.stage canvas.pointer{cursor:pointer}
+.stage canvas:active{cursor:grabbing}
+
+.legend{position:absolute;left:10px;top:10px;background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-radius:4px;padding:6px;display:grid;gap:1px;max-height:calc(100% - 70px);overflow:auto;min-width:176px;backdrop-filter:blur(6px)}
+.legend button{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;background:transparent;border:0;border-radius:3px;padding:3px 6px;text-align:left;cursor:pointer;font-family:var(--f-mono);font-size:11.5px;color:var(--text)}
+.legend button:hover{background:var(--panel-2)}
+.legend button .dot{width:9px;height:9px;border-radius:50%;background:var(--c)}
+.legend button .dot.hollow{background:transparent;border:1.5px dashed var(--c)}
+.legend button .n{color:var(--muted);font-variant-numeric:tabular-nums}
+.legend button.off{color:var(--faint);text-decoration:line-through}
+.legend button.off .dot{opacity:.3}
+.legend .lh{font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding:2px 6px 4px;display:flex;justify-content:space-between;gap:8px}
+.legend .lh button{all:unset;cursor:pointer;color:var(--muted);letter-spacing:.08em}
+.legend .lh button:focus-visible{outline:2px solid var(--ivory)}
+.legend.collapsed{min-width:0}
+.legend.collapsed > button{display:none}
+.legend.collapsed .lh{padding-bottom:2px}
+.legend .lh button:hover{color:var(--text)}
+
+.zoomctl{position:absolute;right:10px;bottom:10px;display:grid;gap:4px}
+.zoomctl button{width:32px;height:32px;display:grid;place-items:center;background:color-mix(in srgb,var(--panel) 90%,transparent);border:1px solid var(--line-2);border-radius:4px;cursor:pointer;font-family:var(--f-mono);font-size:15px}
+.zoomctl button:hover{border-color:var(--muted)}
+.hint{position:absolute;left:10px;bottom:10px;font-family:var(--f-mono);font-size:10.5px;color:var(--faint);pointer-events:none;max-width:calc(100% - 70px)}
+
+.settings{position:absolute;right:10px;top:10px;width:250px;max-width:calc(100% - 20px);background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line-2);border-radius:4px;padding:10px 12px;display:grid;gap:9px;backdrop-filter:blur(6px);z-index:3}
+.settings label{display:grid;gap:3px;font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.settings label span{display:flex;justify-content:space-between}
+.settings label output{color:var(--text)}
+.settings input[type=range]{width:100%;accent-color:var(--ivory)}
+.settings .chk{display:flex;gap:8px;align-items:center;grid-template-columns:none}
+.settings .chk input{accent-color:var(--ivory)}
+.settings h4{margin:0;font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:500}
+
+.tip{position:absolute;pointer-events:none;background:var(--panel-2);border:1px solid var(--line-2);border-radius:4px;padding:6px 9px;font-size:12px;max-width:280px;z-index:4;box-shadow:0 6px 24px rgba(0,0,0,.45)}
+.tip b{display:block;font-weight:600;line-height:1.35}
+.tip span{font-family:var(--f-mono);font-size:10.5px;color:var(--muted)}
+
+.veil{position:absolute;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--stage) 80%,transparent);border:2px dashed var(--ivory);z-index:5;font-family:var(--f-mono);font-size:13px;color:var(--ivory);text-align:center;padding:20px}
+.busy{position:absolute;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--stage) 75%,transparent);z-index:6;font-family:var(--f-mono);font-size:12.5px;color:var(--text)}
+
+.timeline{display:flex;align-items:center;gap:12px;padding:9px 12px;border-top:1px solid var(--line);flex-wrap:wrap}
+.timeline input[type=range]{flex:1 1 200px;min-width:0;accent-color:var(--ivory)}
+.timeline .date{font-family:var(--f-mono);font-size:12px;font-variant-numeric:tabular-nums;min-width:86px}
+.timeline .cnt{font-family:var(--f-mono);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.play{width:30px;height:30px;display:grid;place-items:center;border-radius:50%;background:var(--ivory);color:#14110a;border:0;cursor:pointer;flex:none}
+
+/* ---------- inspector ---------- */
+.inspector{position:relative}
+.insp-scroll{position:absolute;inset:44px 0 0 0;overflow:auto;padding:14px 14px 16px;display:grid;gap:16px;align-content:start}
+.insp-top{display:flex;gap:6px;flex-wrap:wrap}
+.tag{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-mono);font-size:11px;padding:2px 7px;border-radius:3px;border:1px solid var(--line-2);color:var(--muted)}
+.tag i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.tag.stage-seedling{color:#b8e35c;border-color:#3d4d22}
+.tag.stage-budding{color:#f2c14e;border-color:#4d4020}
+.tag.stage-evergreen{color:#3fd0c0;border-color:#1d4a45}
+.inspector h2{font-size:19px;line-height:1.3;margin:0;font-weight:600;text-wrap:balance;overflow-wrap:anywhere}
+.props{margin:0;font-family:var(--f-mono);font-size:11.5px;background:var(--stage);border:1px solid var(--line);border-radius:4px;padding:8px 10px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 12px}
+.props dt{color:var(--faint)}
+.props dd{margin:0;color:var(--text);overflow-wrap:anywhere}
+.props .fm{grid-column:1/-1;color:var(--faint)}
+.excerpt{margin:0;color:var(--muted);font-size:13px;line-height:1.6;border-left:2px solid var(--line-2);padding-left:10px;overflow-wrap:anywhere}
+.row-btns{display:flex;gap:6px;flex-wrap:wrap}
+.sec h3{margin:0 0 6px;font-family:var(--f-mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);font-weight:500;display:flex;justify-content:space-between}
+.linklist{list-style:none;margin:0;padding:0;display:grid;gap:1px}
+.linklist button{width:100%;display:grid;grid-template-columns:9px minmax(0,1fr) auto;gap:9px;align-items:center;background:transparent;border:0;border-radius:3px;padding:4px 6px;text-align:left;cursor:pointer;font-size:13px}
+.linklist button:hover{background:var(--panel-2)}
+.linklist .dot{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.linklist .dot.hollow{background:transparent;border:1.5px dashed var(--c)}
+.linklist .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.linklist .d{font-family:var(--f-mono);font-size:10.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+.empty{color:var(--faint);font-size:12.5px;margin:0}
+.pathbox{border-top:1px solid var(--line);padding-top:14px;display:grid;gap:8px}
+.pathbox .inputs{display:grid;gap:6px}
+.pathbox input[type=text]{width:100%;background:var(--stage);border:1px solid var(--line-2);border-radius:4px;padding:6px 9px;font-size:13px}
+.pathbox .chk{display:flex;gap:7px;align-items:center;font-size:12px;color:var(--muted)}
+.pathbox .chk input{accent-color:var(--ivory)}
+.chain{display:flex;flex-wrap:wrap;gap:4px 4px;align-items:center}
+.chain button{background:var(--panel-2);border:1px solid var(--line-2);border-radius:3px;padding:2px 7px;font-size:12px;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-flex;gap:6px;align-items:center}
+.chain button i{width:7px;height:7px;border-radius:50%;background:var(--c);flex:none}
+.chain .ar{color:var(--ivory);font-family:var(--f-mono);font-size:11px}
+.pathres{font-family:var(--f-mono);font-size:11.5px;color:var(--muted)}
+
+/* ---------- lower ---------- */
+.lower{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.pbody{padding:12px;display:grid;gap:10px;align-content:start}
+.bars{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.bars button{width:100%;display:grid;grid-template-columns:minmax(0,1fr) 34% minmax(42px,auto);gap:10px;align-items:center;background:transparent;border:0;border-radius:3px;padding:4px 4px;cursor:pointer;text-align:left}
+.bars button:hover{background:var(--panel-2)}
+.bars .t{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;gap:7px;align-items:center}
+.bars .t i{width:7px;height:7px;border-radius:50%;background:var(--c);flex:none}
+.bars .track{height:6px;background:var(--panel-2);border-radius:1px;overflow:hidden}
+.bars .fill{height:100%;background:var(--c);opacity:.85}
+.bars .v{font-family:var(--f-mono);font-size:11.5px;text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.bars .sub{display:block;font-family:var(--f-mono);font-size:10px;color:var(--faint)}
+.note{font-size:12px;color:var(--faint);margin:0;line-height:1.5}
+
+.heat{display:grid;grid-template-columns:22px minmax(0,1fr);gap:6px;max-width:440px}
+.bars .v{white-space:nowrap}
+.heat .wd{display:grid;grid-template-rows:repeat(7,1fr);font-family:var(--f-mono);font-size:9.5px;color:var(--faint);padding-top:16px}
+.heat .wd span{display:flex;align-items:center}
+.heat .months{position:relative;height:14px;font-family:var(--f-mono);font-size:9.5px;color:var(--faint)}
+.heat .months span{position:absolute;top:0;white-space:nowrap}
+.cells{display:grid;grid-template-rows:repeat(7,auto);grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:2px}
+.cells button{aspect-ratio:1;border:0;border-radius:1.5px;background:var(--panel-2);padding:0;cursor:pointer;max-width:100%}
+.cells button.l1{background:#173a38}.cells button.l2{background:#1e6560}.cells button.l3{background:#2a9b90}.cells button.l4{background:#3fd0c0}
+.cells button.pad{visibility:hidden}
+.cells button[aria-pressed="true"]{outline:1.5px solid var(--ivory);outline-offset:0}
+.heat-legend{display:flex;gap:4px;align-items:center;font-family:var(--f-mono);font-size:10px;color:var(--faint);justify-content:flex-end}
+.heat-legend i{width:9px;height:9px;border-radius:1.5px;display:inline-block}
+.kpis{display:flex;gap:18px;flex-wrap:wrap}
+.kpis div{display:grid}
+.kpis b{font-family:var(--f-mono);font-weight:500;font-size:16px;font-variant-numeric:tabular-nums}
+.kpis span{font-size:10.5px;color:var(--muted);font-family:var(--f-mono);text-transform:uppercase;letter-spacing:.06em}
+
+.carelist{list-style:none;margin:0;padding:0;display:grid;gap:1px;max-height:150px;overflow:auto}
+.carelist button{width:100%;display:grid;grid-template-columns:9px minmax(0,1fr) auto;gap:8px;align-items:center;background:transparent;border:0;border-radius:3px;padding:3px 4px;cursor:pointer;text-align:left;font-size:12.5px}
+.carelist button:hover{background:var(--panel-2)}
+.carelist .dot{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.carelist .dot.hollow{background:transparent;border:1.5px dashed var(--c)}
+.carelist .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.carelist .d{font-family:var(--f-mono);font-size:10.5px;color:var(--faint)}
+.subh{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);display:flex;justify-content:space-between;margin:0}
+
+.foot{display:flex;flex-wrap:wrap;gap:6px 18px;font-family:var(--f-mono);font-size:11px;color:var(--faint);padding:0 2px}
+.foot kbd{font-family:var(--f-mono);font-size:10.5px;border:1px solid var(--line-2);border-bottom-width:2px;border-radius:3px;padding:0 4px;color:var(--muted)}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom, 0px));background:var(--panel-2);border:1px solid var(--line-2);border-radius:4px;padding:8px 14px;font-size:13px;z-index:20;box-shadow:0 8px 30px rgba(0,0,0,.5);max-width:calc(100% - 32px)}
+
+@media (max-width:1280px){.lower{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:980px){
+  .main{grid-template-columns:minmax(0,1fr)}
+  .insp-scroll{position:static;max-height:none}
+  .search input{width:200px}
+}
+@media (max-width:640px){
+  .lower{grid-template-columns:minmax(0,1fr)}
+  .stage{height:64vh;min-height:380px}
+  .legend{min-width:0;max-height:46%;font-size:11px}
+  .stats{gap:4px 16px;width:100%}
+  .stat b{font-size:16px}
+  .actions{width:100%}
+  .search{flex:1 1 100%}
+  .search input{width:100%}
+  .hint{display:none}
+}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+</style>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+        <g stroke="#566078" stroke-width="1"><line x1="9" y1="11" x2="17" y2="17"/><line x1="17" y1="17" x2="26" y2="9"/><line x1="17" y1="17" x2="24" y2="26"/><line x1="17" y1="17" x2="8" y2="25"/><line x1="26" y1="9" x2="24" y2="26"/></g>
+        <circle cx="17" cy="17" r="4.2" fill="#a99bff"/><circle cx="9" cy="11" r="2.4" fill="#3fd0c0"/><circle cx="26" cy="9" r="2.8" fill="#f2c14e"/><circle cx="24" cy="26" r="2.2" fill="#ff7f8f"/><circle cx="8" cy="25" r="2" fill="#6aa8ff"/>
+      </svg>
+      <div>
+        <h1>Synapse Vault</h1>
+        <p><span id="vaultName">vault-mau/</span><span class="chip-sample" id="dataChip">Dữ liệu mẫu</span></p>
+      </div>
+    </div>
+    <div class="stats" id="stats" aria-live="polite"></div>
+    <div class="actions">
+      <div class="search">
+        <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="#8b94a8" stroke-width="1.6"/><line x1="11" y1="11" x2="15" y2="15" stroke="#8b94a8" stroke-width="1.6"/></svg>
+        <input id="q" type="search" placeholder="Tìm ghi chú, thẻ…  ( / )" autocomplete="off" aria-label="Tìm ghi chú">
+        <span class="count" id="qCount"></span>
+      </div>
+      <label class="btn primary" for="dirInput" title="Chọn thư mục vault Obsidian (.md)">
+        <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 3.5h5l1.5 1.5h6.5v8.5h-13z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+        Mở vault của bạn
+      </label>
+      <input id="dirInput" type="file" webkitdirectory directory multiple hidden>
+      <label class="btn" for="jsonInput" title="Nhập graph dạng JSON {nodes, links}">Nhập JSON</label>
+      <input id="jsonInput" type="file" accept=".json,application/json" hidden>
+      <button class="btn" id="copyJson" type="button">Sao chép JSON</button>
+      <button class="btn ghost" id="resetSample" type="button" hidden>Về dữ liệu mẫu</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <section class="panel" aria-label="Graph tri thức">
+      <div class="phead">
+        <span class="plabel"><i></i>Graph view</span>
+        <div class="seg" role="group" aria-label="Phạm vi">
+          <button type="button" id="mGlobal" aria-pressed="true">Toàn bộ</button>
+          <button type="button" id="mLocal" aria-pressed="false">Cục bộ</button>
+        </div>
+        <select class="mini" id="depth" aria-label="Độ sâu graph cục bộ">
+          <option value="1">sâu 1</option><option value="2" selected>sâu 2</option><option value="3">sâu 3</option>
+        </select>
+        <div class="seg" role="group" aria-label="Tô màu theo">
+          <button type="button" id="cFolder" aria-pressed="true">Thư mục</button>
+          <button type="button" id="cCluster" aria-pressed="false">Cụm ý tưởng</button>
+        </div>
+        <button class="btn sp" type="button" id="btnSettings" aria-expanded="false" aria-controls="settings">
+          <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h8M13 4h1M2 12h2M7 12h7" stroke="currentColor" stroke-width="1.6"/><circle cx="11.5" cy="4" r="1.7" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="5.5" cy="12" r="1.7" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+          Lực &amp; hiển thị
+        </button>
+      </div>
+      <div class="stage" id="stage">
+        <canvas id="cv" role="img" aria-label="Graph liên kết giữa các ghi chú. Dùng danh sách bên phải và bên dưới để duyệt bằng bàn phím."></canvas>
+        <div class="legend" id="legend"></div>
+        <div class="settings" id="settings" hidden>
+          <h4>Lực</h4>
+          <label for="sRepel"><span>Lực đẩy <output id="oRepel"></output></span><input id="sRepel" type="range" min="10" max="220" step="5"></label>
+          <label for="sDist"><span>Độ dài liên kết <output id="oDist"></output></span><input id="sDist" type="range" min="10" max="140" step="2"></label>
+          <label for="sCluster"><span>Gom theo cụm <output id="oCluster"></output></span><input id="sCluster" type="range" min="0" max="0.25" step="0.005"></label>
+          <h4>Hiển thị</h4>
+          <label for="sSize"><span>Cỡ nút <output id="oSize"></output></span><input id="sSize" type="range" min="0.5" max="2.2" step="0.05"></label>
+          <label for="sLink"><span>Độ đậm liên kết <output id="oLink"></output></span><input id="sLink" type="range" min="0.03" max="1" step="0.01"></label>
+          <label for="sLabel"><span>Mật độ nhãn <output id="oLabel"></output></span><input id="sLabel" type="range" min="0.4" max="3" step="0.05"></label>
+          <label class="chk" for="sParticles"><input id="sParticles" type="checkbox"> Hạt chạy dọc liên kết</label>
+          <label class="chk" for="sArrows"><input id="sArrows" type="checkbox"> Mũi tên chiều liên kết</label>
+          <label class="chk" for="sOrphans"><input id="sOrphans" type="checkbox"> Hiện ghi chú mồ côi</label>
+        </div>
+        <div class="zoomctl">
+          <button type="button" id="zIn" aria-label="Phóng to">+</button>
+          <button type="button" id="zOut" aria-label="Thu nhỏ">−</button>
+          <button type="button" id="zFit" aria-label="Vừa khung" title="Vừa khung">⤢</button>
+        </div>
+        <div class="hint" id="hint">Kéo để di chuyển · cuộn để phóng · kéo nút để gỡ cụm · thả thư mục vault vào đây</div>
+        <div class="tip" id="tip" hidden></div>
+        <div class="veil" id="veil" hidden>Thả thư mục vault Obsidian vào đây<br>Mọi xử lý diễn ra trong trình duyệt của bạn</div>
+        <div class="busy" id="busy" hidden>Đang đọc vault…</div>
+      </div>
+      <div class="timeline">
+        <button class="play" id="play" type="button" aria-label="Phát lại quá trình phát triển">
+          <svg id="playIco" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 1.5l8 4.5-8 4.5z" fill="currentColor"/></svg>
+        </button>
+        <input type="range" id="time" min="0" max="100" value="100" aria-label="Mốc thời gian">
+        <span class="date" id="timeDate"></span>
+        <span class="cnt" id="timeCnt"></span>
+      </div>
+    </section>
+
+    <aside class="panel inspector" aria-label="Chi tiết ghi chú">
+      <div class="phead"><span class="plabel" style="--c:var(--ivory)"><i></i>Ghi chú đang chọn</span><span class="pmeta sp" id="inspMeta"></span></div>
+      <div class="insp-scroll">
+        <div id="insp"></div>
+        <div class="pathbox">
+          <div class="sec"><h3><span>Đường nối hai ý tưởng</span></h3></div>
+          <div class="inputs">
+            <input type="text" id="pfA" list="titles" placeholder="Từ ghi chú…" aria-label="Ghi chú bắt đầu">
+            <input type="text" id="pfB" list="titles" placeholder="Đến ghi chú…" aria-label="Ghi chú kết thúc">
+            <datalist id="titles"></datalist>
+          </div>
+          <label class="chk" for="pfSkipDaily"><input type="checkbox" id="pfSkipDaily" checked> Không đi tắt qua ghi chú Daily</label>
+          <div class="row-btns"><button class="btn" id="pfGo" type="button">Tìm đường</button><button class="btn ghost" id="pfClear" type="button" hidden>Xoá đường</button><button class="btn ghost" id="pfRandom" type="button">Thử ngẫu nhiên</button></div>
+          <div id="pfOut"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <section class="lower">
+    <div class="panel">
+      <div class="phead"><span class="plabel" style="--c:var(--violet)"><i></i>Ghi chú trung tâm</span><span class="pmeta sp">số liên kết</span></div>
+      <div class="pbody"><ul class="bars" id="hubs"></ul></div>
+    </div>
+    <div class="panel">
+      <div class="phead"><span class="plabel" style="--c:var(--ivory)"><i></i>Cầu nối giữa các cụm</span><span class="pmeta sp">betweenness</span></div>
+      <div class="pbody"><ul class="bars" id="bridges"></ul><p class="note">Ghi chú nằm trên nhiều đường ngắn nhất giữa các ý tưởng. Bỏ chúng đi, các cụm sẽ rời nhau.</p></div>
+    </div>
+    <div class="panel">
+      <div class="phead"><span class="plabel" style="--c:var(--teal)"><i></i>Nhịp ghi chép</span><span class="pmeta sp" id="heatRange"></span></div>
+      <div class="pbody">
+        <div class="kpis" id="heatKpis"></div>
+        <div class="heat"><div class="wd"><span>T2</span><span></span><span>T4</span><span></span><span>T6</span><span></span><span>CN</span></div><div><div class="months" id="months"></div><div class="cells" id="cells"></div></div></div>
+        <div class="heat-legend">ít <i style="background:var(--panel-2)"></i><i style="background:#173a38"></i><i style="background:#1e6560"></i><i style="background:#2a9b90"></i><i style="background:#3fd0c0"></i> nhiều</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="phead"><span class="plabel" style="--c:var(--bad)"><i></i>Cần chăm sóc</span></div>
+      <div class="pbody">
+        <p class="subh"><span>Mồ côi · chưa nối với gì</span><span id="orphN"></span></p>
+        <ul class="carelist" id="orphans"></ul>
+        <p class="subh"><span>Liên kết tới ghi chú chưa tạo</span><span id="ghostN"></span></p>
+        <ul class="carelist" id="ghosts"></ul>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span><kbd>/</kbd> tìm</span><span><kbd>Esc</kbd> bỏ chọn</span><span><kbd>L</kbd> graph cục bộ</span><span><kbd>F</kbd> vừa khung</span><span><kbd>Space</kbd> phát lại</span>
+    <span>Vault của bạn được đọc ngay trong trình duyệt, không tải lên đâu cả.</span>
+  </footer>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(() => {
+"use strict";
+
+/* =========================================================
+   1. SAMPLE VAULT
+   ========================================================= */
+const START = "2026-05-18";
+const DAY = 86400000;
+const dayToDate = (base, d) => { const t = new Date(base + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + d); return t.toISOString().slice(0, 10); };
+const dateToDay = (base, s) => Math.round((Date.parse(s + "T00:00:00Z") - Date.parse(base + "T00:00:00Z")) / DAY);
+function mulberry32(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+const CATS = { ai:"AI Agent", auto:"Tự động hoá", pkm:"Quản lý tri thức", prod:"Sản phẩm", design:"Thiết kế", eng:"Kỹ thuật phần mềm", lead:"Lãnh đạo & đội nhóm", learn:"Học tập", health:"Sức khoẻ", money:"Tài chính cá nhân", write:"Viết", biz:"Kinh doanh" };
+const TAGS = { ai:"ai", auto:"automation", pkm:"pkm", prod:"product", design:"design", eng:"engineering", lead:"leadership", learn:"learning", health:"health", money:"finance", write:"writing", biz:"business" };
+const NOTES = [
+ ["Agent tốt cần công cụ hẹp và mô tả rõ","ai"],["Prompt nên viết như một bản đặc tả","ai write"],["Ngữ cảnh dài làm loãng sự chú ý của mô hình","ai"],["Viết eval trước khi tối ưu prompt","ai eng"],["RAG chỉ tốt bằng bước chia đoạn tài liệu","ai"],["Bộ nhớ agent dạng file dễ kiểm soát hơn vector DB","ai pkm"],["MCP biến mỗi hệ thống thành công cụ cho agent","ai auto"],["Con người duyệt ở bước không thể hoàn tác","ai auto"],["Skill đóng gói quy trình lặp lại cho agent","ai auto"],["Chia nhỏ tác vụ giúp agent ít ảo giác hơn","ai"],["Ghi log mọi lần agent gọi công cụ","ai eng"],
+ ["Chỉ tự động hoá quy trình đã ổn định","auto"],["Webhook tốt hơn polling khi có thể","auto eng"],["Mọi tự động hoá cần một nút tắt khẩn cấp","auto"],["Biên bản họp tự động phải có người chịu trách nhiệm","auto lead"],["Đồng bộ hai chiều luôn khó hơn ước tính","auto eng"],["Idempotency giúp chạy lại job an toàn","auto eng"],["Bảng tính là cơ sở dữ liệu đầu tiên của mọi đội","auto biz"],
+ ["Ghi chú nguyên tử chỉ chứa một ý","pkm"],["Liên kết quan trọng hơn thư mục","pkm"],["Viết lại bằng lời của mình để hiểu thật","pkm learn"],["Ghi chú hằng ngày là hộp thư đến của bộ não","pkm"],["MOC nên mọc lên từ ghi chú sẵn có","pkm"],["Ghi chú mồ côi là ý tưởng chưa được tiêu hoá","pkm"],["Tiêu đề ghi chú nên là một mệnh đề","pkm write"],["Ôn lại định kỳ để tri thức không mục","pkm learn"],["Trích dẫn nguồn ngay khi ghi chép","pkm"],["Hệ thống đơn giản thì mới dùng được lâu","pkm"],
+ ["Hiểu rõ vấn đề quan trọng hơn giải pháp hay","prod"],["Phỏng vấn người dùng về hành vi trong quá khứ","prod"],["Ra mắt nhỏ để học nhanh","prod biz"],["Chỉ số North Star phải phản ánh giá trị người dùng","prod biz"],["Tính năng không ai dùng vẫn tốn chi phí bảo trì","prod eng"],["Onboarding là lời hứa đầu tiên của sản phẩm","prod design"],["Ưu tiên theo chi phí của sự chậm trễ","prod"],["Bản demo thuyết phục hơn tài liệu dài","prod lead"],
+ ["Phân cấp thị giác dẫn đường cho mắt","design"],["Khoảng trắng là một thành phần thiết kế","design"],["Màu sắc phải mang ý nghĩa","design"],["Trạng thái rỗng cũng cần được thiết kế","design prod"],["Chuyển động giúp người dùng giữ phương hướng","design"],["Đồ thị lớn cần lọc trước khi vẽ","design pkm"],["Typography quyết định cảm giác đọc","design write"],
+ ["Viết code để người khác đọc","eng"],["Test ở ranh giới hệ thống","eng"],["Đặt tên tốt giảm một nửa tài liệu","eng write"],["Nợ kỹ thuật cần được ghi lại như nợ thật","eng lead"],["Triển khai nhỏ và thường xuyên","eng prod"],["Quan sát được trước khi mở rộng","eng"],["Cache là nguồn gốc của nhiều bug khó","eng"],["API nên dễ dùng đúng và khó dùng sai","eng design"],
+ ["Họp không ra quyết định là họp thừa","lead"],["Chốt ai làm gì trước khi kết thúc họp","lead"],["Phản hồi sớm rẻ hơn phản hồi muộn","lead"],["Giao kết quả thay vì giao việc","lead"],["Văn hoá viết giúp đội làm việc bất đồng bộ","lead write"],["1:1 là thời gian của nhân viên","lead"],["Niềm tin xây từ những lời hứa nhỏ được giữ","lead"],
+ ["Lặp lại ngắt quãng giúp nhớ lâu","learn"],["Dạy lại là cách học sâu nhất","learn"],["Học qua dự án thật nhanh hơn học qua khoá học","learn"],["Chủ động nhớ lại hiệu quả hơn đọc lại","learn"],["Đọc ít sách nhưng đọc kỹ","learn"],
+ ["Ngủ đủ là công cụ năng suất rẻ nhất","health"],["Đi bộ giúp gỡ bế tắc khi suy nghĩ","health"],["Năng lượng quan trọng hơn thời gian","health"],["Làm việc sâu theo khối 90 phút","health write"],
+ ["Lãi kép áp dụng cho cả kỹ năng","money learn"],["Quỹ khẩn cấp mua sự bình tĩnh","money"],["Tự động trích tiết kiệm trước khi chi tiêu","money auto"],
+ ["Viết là cách suy nghĩ rõ ràng","write"],["Bản nháp đầu tiên được phép tệ","write"],["Mỗi đoạn văn chỉ một ý","write"],["Viết cho một người đọc cụ thể","write biz"],["Biên tập phần lớn là cắt bớt","write"],
+ ["Phân phối quan trọng ngang sản phẩm","biz"],["Khách hàng trả tiền cho kết quả","biz prod"],["Định giá theo giá trị mang lại","biz"],["Lợi thế nhỏ cộng dồn thành hào luỹ","biz money"],["Dòng tiền quan trọng hơn lợi nhuận trên giấy","biz money"]
+];
+const CROSS = [[15,52],[15,53],[42,37],[41,37],[9,12],[7,13],[19,73],[25,46],[21,60],[71,21],[59,26],[62,59],[64,66],[67,66],[68,61],[70,12],[31,48],[36,31],[23,20],[24,20],[2,71],[4,45],[11,49],[14,8],[17,16],[56,71],[74,77],[76,31],[39,42],[6,19],[22,26],[60,62],[29,30],[53,55],[47,33],[3,10],[5,27]];
+const REFS = [
+ ["How to Take Smart Notes","Sönke Ahrens","pkm write learn","book"],["Building a Second Brain","Tiago Forte","pkm","book"],["Atomic Habits","James Clear","health learn","book"],["Deep Work","Cal Newport","health write","book"],
+ ["Thinking, Fast and Slow","Daniel Kahneman","learn biz","book"],["The Mom Test","Rob Fitzpatrick","prod","book"],["Inspired","Marty Cagan","prod","book"],["Shape Up","Ryan Singer","prod lead","book"],
+ ["The Pragmatic Programmer","Andy Hunt","eng","book"],["A Philosophy of Software Design","John Ousterhout","eng","book"],["Designing Data-Intensive Applications","Martin Kleppmann","eng auto","book"],["Refactoring UI","Steve Schoger","design","book"],
+ ["The Design of Everyday Things","Don Norman","design","book"],["Information Dashboard Design","Stephen Few","design","book"],["High Output Management","Andy Grove","lead","book"],["Radical Candor","Kim Scott","lead","book"],
+ ["The Psychology of Money","Morgan Housel","money","book"],["On Writing Well","William Zinsser","write","book"],["Bird by Bird","Anne Lamott","write","book"],["Make It Stick","Peter C. Brown","learn","book"],
+ ["Why We Sleep","Matthew Walker","health","book"],["The Lean Startup","Eric Ries","biz prod","book"],["Building Effective Agents",null,"ai","article"],["Model Context Protocol",null,"ai auto","spec"],
+ ["Evergreen notes","Andy Matuschak","pkm write","article"],["Zettelkasten của Niklas Luhmann",null,"pkm","article"],["Force-directed graph drawing",null,"design","paper"]
+];
+const TEAM = [["Lan Nguyễn","Product Lead"],["Minh Trần","Tech Lead"],["Hà Phạm","Product Designer"],["Tuấn Lê","Data Engineer"],["Quân Đỗ","Backend Engineer"],["Mai Vũ","Vận hành"],["Bảo Hoàng","Khách hàng · An Phát"],["Khánh Linh","Marketing"]];
+const PROJECTS = [
+ ["Trợ lý biên bản họp","Biên bản","ai auto",["Lan Nguyễn","Minh Trần","Tuấn Lê"],10],
+ ["Kết nối Lark qua MCP","Lark MCP","ai auto eng",["Minh Trần","Quân Đỗ"],35],
+ ["Bản đồ tri thức đội nhóm","Bản đồ tri thức","pkm design",["Hà Phạm","Lan Nguyễn"],70],
+ ["Dashboard vận hành Q4","Dashboard Q4","design biz",["Mai Vũ","Tuấn Lê","Hà Phạm"],95],
+ ["Chuẩn hoá onboarding khách hàng","Onboarding","prod lead",["Lan Nguyễn","Bảo Hoàng","Mai Vũ"],50],
+ ["Khoá học nội bộ về agent","Khoá học agent","learn ai",["Khánh Linh","Minh Trần"],120],
+ ["Blog cá nhân","Blog","write",["Khánh Linh"],20],
+ ["Chạy 10km","Chạy 10km","health",[],30],
+ ["Kế hoạch tài chính 2027","Tài chính 2027","money",[],140]
+];
+const MEET_KINDS = ["Họp tuần","Sprint review","Retro","Demo","Phỏng vấn người dùng","Chốt phạm vi"];
+const CLIPS = [
+ ["Cách đội nhỏ dùng agent để trả lời ticket hỗ trợ","ai"],["Vì sao đồ thị tri thức hay biến thành nùi rối","pkm"],["Hướng dẫn thiết kế dashboard cho người vận hành","design"],["So sánh các cách chia đoạn tài liệu cho RAG","ai"],
+ ["Mẫu biên bản họp một trang","lead"],["Kinh nghiệm viết prompt hệ thống cho trợ lý nội bộ","ai"],["Bài học từ 100 buổi phỏng vấn người dùng","prod"],["Thiết kế trạng thái rỗng cho ứng dụng","design"],
+ ["Cách đặt OKR cho đội sản phẩm nhỏ","lead"],["Ghi chép kiểu Zettelkasten cho người bận rộn","pkm"],["Tối ưu chi phí gọi API mô hình ngôn ngữ","ai"],["Webhook, hàng đợi và xử lý thử lại","auto"],
+ ["Chọn thư viện vẽ đồ thị cho web","design"],["Nguyên tắc màu cho biểu đồ phân loại","design"],["Thói quen viết 300 chữ mỗi ngày","write"],["Ngủ và trí nhớ: tóm tắt nghiên cứu","health"],
+ ["Chạy bộ vùng 2 cho người mới","health"],["Lập ngân sách theo phương pháp phong bì","money"],["Nhật ký quyết định là gì","lead"],["Cách viết tài liệu thiết kế kỹ thuật","eng"],
+ ["Định giá phần mềm B2B cho thị trường Việt Nam","biz"],["Đo lường mức độ dùng tính năng","prod"],["Tách nhỏ monolith hay không","eng"],["Mẫu 1:1 cho quản lý mới","lead"],
+ ["Học bằng thẻ ghi nhớ trong Anki","learn"],["Kỹ thuật Feynman","learn"],["Thiết kế quyền truy cập cho công cụ agent","ai"],["Đánh giá chất lượng câu trả lời của chatbot","ai"],
+ ["Bản đồ hành trình khách hàng","prod"],["Viết email ngắn mà rõ","write"],["Cấu trúc vault Obsidian của kepano","pkm"],["Đồng bộ lịch họp giữa hai hệ thống","auto"]
+];
+const GHOSTS = [[2,"Mẫu đặc tả prompt"],[13,"Kiến trúc hướng sự kiện"],[44,"Quy trình review code"],[9,"Lộ trình agent 2027"],[59,"Hệ thống thẻ ghi nhớ"],[30,"Kịch bản phỏng vấn mẫu"],[29,"Second-order thinking"],[63,"Second-order thinking"],[5,"Kiến trúc hướng sự kiện"],[52,"Mẫu agenda họp"]];
+
+function buildSample(){
+  const R = mulberry32(20261115);
+  const pick = a => a[Math.floor(R() * a.length)];
+  const nodes = [], links = [], by = new Map(), seen = new Set();
+  const add = (title, group, day, o = {}) => {
+    if (by.has(title)) return by.get(title);
+    const n = { id:title, title, group, created:dayToDate(START, Math.max(0, Math.min(181, day))), tags:o.tags || [], stage:o.stage || null, words:o.words || null, role:o.role || null, kind:o.kind || null, ghost:!!o.ghost };
+    nodes.push(n); by.set(title, n); return n;
+  };
+  const L = (a, b) => { if (!a || !b || a === b) return; const k = a.id + "\u0001" + b.id; if (seen.has(k)) return; seen.add(k); links.push({ source:a.id, target:b.id }); };
+  const dayOf = n => dateToDay(START, n.created);
+
+  const home = add("Trang chủ", "Categories", 0, { tags:["home"] });
+  const cats = {};
+  Object.entries(CATS).forEach(([k, t], i) => { cats[k] = add(t, "Categories", Math.floor(i / 3), { tags:["moc", TAGS[k]] }); L(home, cats[k]); });
+
+  const notes = NOTES.map(([t, ks]) => {
+    const keys = ks.split(" ");
+    const day = 6 + Math.floor(Math.pow(R(), 0.9) * 175);
+    const r = R(), stage = r < .32 ? "seedling" : r < .68 ? "budding" : "evergreen";
+    const n = add(t, "Notes", day, { tags:[...keys.map(k => TAGS[k])], stage, words:140 + Math.floor(R() * 760) });
+    n._keys = keys; return n;
+  });
+  notes.forEach(n => n._keys.forEach(k => L(n, cats[k])));
+  const byCat = {};
+  notes.forEach(n => n._keys.forEach(k => (byCat[k] = byCat[k] || []).push(n)));
+  notes.forEach(n => {
+    const pool = byCat[n._keys[0]].filter(m => m !== n);
+    const c = 1 + Math.floor(R() * 2.2);
+    for (let i = 0; i < c && pool.length; i++) L(n, pick(pool));
+    if (R() < .2) { const k = pick(Object.keys(byCat)); L(n, pick(byCat[k])); }
+  });
+  CROSS.forEach(([a, b]) => L(notes[a - 1], notes[b - 1]));
+
+  const people = {};
+  TEAM.forEach(([name, role], i) => { people[name] = add(name, "People", 2 + i * 3, { tags:["person", "team"], role }); });
+
+  REFS.forEach(([title, author, ks, kind]) => {
+    const keys = ks.split(" ");
+    const ref = add(title, "References", 3 + Math.floor(R() * 165), { tags:[kind, ...keys.map(k => TAGS[k])], kind });
+    keys.forEach(k => L(ref, cats[k]));
+    if (author) { const p = add(author, "People", dayOf(ref), { tags:["person", "author"], role:"Tác giả" }); L(ref, p); }
+    const pool = keys.flatMap(k => byCat[k] || []);
+    const c = 2 + Math.floor(R() * 2);
+    for (let i = 0; i < c && pool.length; i++) L(pick(pool), ref);
+  });
+
+  const projects = PROJECTS.map(([title, short, ks, team, start]) => {
+    const keys = ks.split(" ");
+    const p = add(title, "Projects", start, { tags:["project", ...keys.map(k => TAGS[k])] });
+    p._short = short; p._team = team.map(t => people[t]); p._start = start; p._keys = keys;
+    keys.forEach(k => L(p, cats[k]));
+    p._team.forEach(m => L(p, m));
+    const pool = keys.flatMap(k => byCat[k] || []);
+    p._notes = [];
+    const c = 3 + Math.floor(R() * 3);
+    for (let i = 0; i < c && pool.length; i++) { const n = pick(pool); p._notes.push(n); L(p, n); }
+    return p;
+  });
+
+  const meetingsByDay = new Map();
+  const pushMeet = (d, m) => { if (!meetingsByDay.has(d)) meetingsByDay.set(d, []); meetingsByDay.get(d).push(m); };
+  projects.forEach(p => {
+    if (p._team.length < 2) return;
+    let d = p._start + 3 + Math.floor(R() * 5), i = 0;
+    while (d <= 181) {
+      const kind = i === 0 ? "Kick-off" : pick(MEET_KINDS);
+      const date = dayToDate(START, d);
+      const m = add(`${date} ${kind} ${p._short}`, "Meetings", d, { tags:["meeting", kind.toLowerCase().replace(/\s+/g, "-")], kind });
+      L(m, p);
+      const k = Math.min(p._team.length, 2 + Math.floor(R() * 2));
+      [...p._team].sort(() => R() - .5).slice(0, k).forEach(x => L(m, x));
+      if (R() < .6 && p._notes.length) L(m, pick(p._notes));
+      if (R() < .3) L(m, pick(notes.filter(n => n._keys.some(kk => p._keys.includes(kk)))));
+      pushMeet(d, m);
+      d += 8 + Math.floor(R() * 9); i++;
+    }
+  });
+  [["Minh Trần", 16],["Hà Phạm", 23],["Tuấn Lê", 30]].forEach(([name, off]) => {
+    for (let d = off; d <= 181; d += 14 + Math.floor(R() * 8)) {
+      const m = add(`${dayToDate(START, d)} 1:1 ${name}`, "Meetings", d, { tags:["meeting", "1-1"], kind:"1:1" });
+      L(m, people[name]); if (R() < .35) L(m, pick(byCat.lead)); pushMeet(d, m);
+    }
+  });
+
+  const clips = CLIPS.map(([t, k]) => {
+    const c = add(t, "Clippings", 4 + Math.floor(R() * 176), { tags:["clipping", TAGS[k]] });
+    if (R() < .72) L(c, cats[k]);
+    if (R() < .38 && byCat[k]) L(pick(byCat[k]), c);
+    return c;
+  });
+
+  const notesByDay = new Map(); notes.forEach(n => { const d = dayOf(n); if (!notesByDay.has(d)) notesByDay.set(d, []); notesByDay.get(d).push(n); });
+  const clipsByDay = new Map(); clips.forEach(n => { const d = dayOf(n); if (!clipsByDay.has(d)) clipsByDay.set(d, []); clipsByDay.get(d).push(n); });
+  for (let d = 0; d <= 181; d++) {
+    const ev = (meetingsByDay.get(d) || []).length + (notesByDay.get(d) || []).length;
+    if (!(ev > 0 || R() < .55)) continue;
+    const daily = add(dayToDate(START, d), "Daily", d, { tags:["daily"], words:40 + Math.floor(R() * 320) });
+    (meetingsByDay.get(d) || []).forEach(m => L(daily, m));
+    (notesByDay.get(d) || []).forEach(n => L(daily, n));
+    (clipsByDay.get(d) || []).forEach(n => L(daily, n));
+    const before = links.length;
+    const active = projects.filter(p => p._start <= d);
+    if (active.length && R() < .55) L(daily, pick(active));
+    if (R() < .18) L(daily, pick(notes.filter(n => dayOf(n) < d).concat(notes[0])));
+    if (links.length === before) L(daily, active.length ? pick(active) : pick(notes.filter(n => dayOf(n) <= d).concat(notes[0])));
+  }
+
+  // inbox items saved but never processed: these become the orphans
+  [["Bản tin AI tuần 45", 176],["Ghi âm ý tưởng lúc chạy bộ", 171],["Ảnh chụp bảng trắng buổi retro", 163],["Danh sách podcast nên nghe", 140],["Trích đoạn hay chưa phân loại", 128]]
+    .forEach(([t, d]) => add(t, "Clippings", d, { tags:["clipping", "inbox"] }));
+
+  GHOSTS.forEach(([i, title]) => {
+    const src = notes[i - 1];
+    const g = by.get(title) || add(title, "Chưa tạo", dayOf(src), { ghost:true });
+    L(src, g);
+  });
+  const pm = by.get("Kết nối Lark qua MCP"); L(pm, by.get("Kiến trúc hướng sự kiện"));
+
+  nodes.forEach(n => { delete n._keys; });
+  return { name:"vault-mau", sample:true, nodes, links };
+}
+
+/* =========================================================
+   2. GRAPH MODEL
+   ========================================================= */
+const FOLDER_COLORS = { "Categories":"#a99bff", "Notes":"#3fd0c0", "Daily":"#f2c14e", "Meetings":"#ff7f8f", "Projects":"#7ee08a", "References":"#6aa8ff", "People":"#f49ad8", "Clippings":"#ff9f5a", "Chưa tạo":"#6b7385" };
+const PALETTE = ["#3fd0c0","#a99bff","#f2c14e","#ff7f8f","#6aa8ff","#7ee08a","#f49ad8","#ff9f5a","#b8e35c","#62d6f0","#d7b4ff","#e8c98a","#ff6fb5","#9fb7ff"];
+const CLUSTER_PALETTE = ["#3fd0c0","#a99bff","#ff7f8f","#6aa8ff","#f2c14e","#7ee08a","#f49ad8","#ff9f5a","#62d6f0","#b8e35c","#d7b4ff","#e8c98a","#ff6fb5","#9fb7ff","#c9f0a0","#ffb3a1"];
+const C = { stage:"#06080d", glow:"rgba(80,90,150,0.10)", link:"#8a96b4", text:"#e4e8f1", muted:"#8b94a8", faint:"#566078", ivory:"#f6efd9", pill:"rgba(13,17,25,0.92)", ghost:"#6b7385", other:"#4a5266" };
+
+const S = {
+  name:"", sample:true, nodes:[], links:[], byId:new Map(), adj:new Map(), out:new Map(), inn:new Map(),
+  groups:[], groupColor:{}, clusters:[], baseDate:START, maxDay:0,
+  visNodes:[], visLinks:[], visSet:new Set(),
+  hover:null, selected:null, matches:null, matchLabel:"", path:null, pathSet:null, pathEdges:new Set(),
+  hidden:new Set(), colorMode:"folder", local:false, depth:2, cutoff:0, playing:false,
+  transform:d3.zoomIdentity, w:0, h:0, dailyGroup:null,
+  anchors:[], autoFit:false,
+  settings:{ repel:70, dist:34, cluster:0.12, size:1, linkAlpha:0.32, labels:1, particles:true, arrows:false, orphans:true }
+};
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+if (reduced) S.settings.particles = false;
+
+const norm = s => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const hexA = (hex, a) => { const h = hex.replace("#", ""); const n = parseInt(h.length === 3 ? h.split("").map(c => c + c).join("") : h, 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
+const isDailyGroup = g => /^(daily|journal|journals|nhật ký|nhat ky|diary|periodic)/i.test(g || "");
+
+function loadGraph(raw){
+  S.name = raw.name || "vault"; S.sample = !!raw.sample;
+  const byId = new Map();
+  const nodes = [];
+  for (const r of raw.nodes) {
+    if (r == null || r.id == null) continue;
+    const id = String(r.id);
+    if (byId.has(id)) continue;
+    const n = { id, title:r.title || id, group:r.ghost ? "Chưa tạo" : (r.group || "Gốc"), created:r.created || null, tags:r.tags || [], stage:r.stage || null, words:r.words || null, role:r.role || null, kind:r.kind || null, excerpt:r.excerpt || null, path:r.path || null, ghost:!!r.ghost, x:undefined, y:undefined };
+    byId.set(id, n); nodes.push(n);
+  }
+  const links = [], seen = new Set();
+  for (const l of raw.links) {
+    const s = byId.get(String(typeof l.source === "object" ? l.source.id : l.source));
+    const t = byId.get(String(typeof l.target === "object" ? l.target.id : l.target));
+    if (!s || !t || s === t) continue;
+    const k = s.id + "\u0001" + t.id; if (seen.has(k)) continue; seen.add(k);
+    links.push({ source:s, target:t, seed:Math.random() });
+  }
+  // dates
+  const dated = nodes.filter(n => n.created && /^\d{4}-\d{2}-\d{2}/.test(n.created));
+  let min = dated.length ? dated.reduce((a, n) => n.created < a ? n.created : a, "9999") : START;
+  min = min.slice(0, 10);
+  S.baseDate = min;
+  let maxDay = 0;
+  nodes.forEach(n => { n.day = n.created ? Math.max(0, dateToDay(min, n.created.slice(0, 10))) : 0; if (!Number.isFinite(n.day)) n.day = 0; maxDay = Math.max(maxDay, n.day); });
+  // ghosts appear with their first referrer
+  // adjacency
+  const adj = new Map(), out = new Map(), inn = new Map();
+  nodes.forEach(n => { adj.set(n, new Set()); out.set(n, []); inn.set(n, []); });
+  links.forEach(l => { adj.get(l.source).add(l.target); adj.get(l.target).add(l.source); out.get(l.source).push(l.target); inn.get(l.target).push(l.source); });
+  nodes.forEach(n => { n.deg = adj.get(n).size; n.inDeg = inn.get(n).length; n.outDeg = out.get(n).length; });
+  nodes.filter(n => n.ghost).forEach(n => { const refs = inn.get(n); if (refs.length) n.day = Math.min(...refs.map(r => r.day)); });
+  Object.assign(S, { nodes, links, byId, adj, out, inn, maxDay, cutoff:maxDay });
+
+  // groups & colors
+  const counts = {};
+  nodes.forEach(n => counts[n.group] = (counts[n.group] || 0) + 1);
+  let order = Object.keys(counts);
+  if (S.sample) order = Object.keys(FOLDER_COLORS).filter(g => counts[g]);
+  else order.sort((a, b) => (a === "Chưa tạo") - (b === "Chưa tạo") || counts[b] - counts[a]);
+  S.groups = order.map(g => ({ name:g, count:counts[g] }));
+  S.groupColor = {};
+  let pi = 0;
+  order.forEach(g => { S.groupColor[g] = g === "Chưa tạo" ? C.ghost : (S.sample && FOLDER_COLORS[g]) || PALETTE[pi++ % PALETTE.length]; });
+  S.dailyGroup = order.find(isDailyGroup) || null;
+  S.hidden = new Set();
+
+  analyse();
+  S.selected = null; S.hover = null; S.matches = null; S.path = null; S.pathSet = null; S.pathEdges = new Set(); S.local = false;
+}
+
+/* ---- community detection: Louvain (multi-level, modularity) ---- */
+function louvain(N, nbrs, R){
+  // nbrs: Array<Map<j, w>> without self loops
+  let comm = Array.from({ length:N }, (_, i) => i);
+  let curN = N, curNbrs = nbrs, curK = nbrs.map(m => { let s = 0; m.forEach(w => s += w); return s; });
+  let map = Array.from({ length:N }, (_, i) => i); // original -> current super node
+  for (let level = 0; level < 5; level++) {
+    const m2 = curK.reduce((a, b) => a + b, 0) || 1;
+    const c = Array.from({ length:curN }, (_, i) => i);
+    const tot = Float64Array.from(curK);
+    const order = Array.from({ length:curN }, (_, i) => i);
+    let moved = true, it = 0, anyMove = false;
+    while (moved && it < 25) {
+      moved = false; it++;
+      for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+      for (const i of order) {
+        const ci = c[i], ki = curK[i];
+        const w = new Map();
+        curNbrs[i].forEach((wt, j) => { const cj = c[j]; w.set(cj, (w.get(cj) || 0) + wt); });
+        tot[ci] -= ki;
+        let best = ci, bestGain = (w.get(ci) || 0) - tot[ci] * ki / m2;
+        w.forEach((wic, cc) => { const g = wic - tot[cc] * ki / m2; if (g > bestGain + 1e-9) { bestGain = g; best = cc; } });
+        tot[best] += ki;
+        if (best !== ci) { c[i] = best; moved = true; anyMove = true; }
+      }
+    }
+    // relabel
+    const lab = new Map(); c.forEach(x => { if (!lab.has(x)) lab.set(x, lab.size); });
+    const cc = c.map(x => lab.get(x));
+    map = map.map(x => cc[x]);
+    if (!anyMove || lab.size === curN) break;
+    // aggregate
+    const nN = lab.size, nNbrs = Array.from({ length:nN }, () => new Map()), nK = new Array(nN).fill(0);
+    for (let i = 0; i < curN; i++) {
+      nK[cc[i]] += curK[i];
+      curNbrs[i].forEach((wt, j) => { const a = cc[i], b = cc[j]; if (a !== b) nNbrs[a].set(b, (nNbrs[a].get(b) || 0) + wt); });
+    }
+    curN = nN; curNbrs = nNbrs; curK = nK;
+  }
+  return map;
+}
+
+/* ---- Brandes betweenness (unweighted, undirected) ---- */
+function betweenness(list, nb, sampleSources){
+  const N = list.length, CB = new Float64Array(N);
+  let sources = Array.from({ length:N }, (_, i) => i);
+  if (sampleSources && N > sampleSources) { const R = mulberry32(7); sources = sources.sort(() => R() - .5).slice(0, sampleSources); }
+  const sigma = new Float64Array(N), d = new Int32Array(N), delta = new Float64Array(N);
+  const P = Array.from({ length:N }, () => []);
+  const Q = new Int32Array(N), St = new Int32Array(N);
+  for (const s of sources) {
+    for (let i = 0; i < N; i++) { P[i].length = 0; sigma[i] = 0; d[i] = -1; delta[i] = 0; }
+    sigma[s] = 1; d[s] = 0;
+    let qh = 0, qt = 0, sp = 0; Q[qt++] = s;
+    while (qh < qt) {
+      const v = Q[qh++]; St[sp++] = v;
+      for (const w of nb[v]) {
+        if (d[w] < 0) { d[w] = d[v] + 1; Q[qt++] = w; }
+        if (d[w] === d[v] + 1) { sigma[w] += sigma[v]; P[w].push(v); }
+      }
+    }
+    while (sp > 0) {
+      const w = St[--sp];
+      for (const v of P[w]) delta[v] += sigma[v] / sigma[w] * (1 + delta[w]);
+      if (w !== s) CB[w] += delta[w];
+    }
+  }
+  const scale = sources.length < N ? N / sources.length : 1;
+  for (let i = 0; i < N; i++) CB[i] = CB[i] * scale / 2;
+  return CB;
+}
+
+function analyse(){
+  const core = S.nodes.filter(n => !n.ghost && n.group !== S.dailyGroup);
+  const idx = new Map(core.map((n, i) => [n, i]));
+  const nbrsW = core.map(n => { const m = new Map(); S.adj.get(n).forEach(x => { if (idx.has(x)) m.set(idx.get(x), 1); }); return m; });
+  const comm = louvain(core.length, nbrsW, mulberry32(42));
+  // gather
+  const groups = new Map();
+  core.forEach((n, i) => { const c = comm[i]; if (!groups.has(c)) groups.set(c, []); groups.get(c).push(n); });
+  let clusters = [...groups.values()].sort((a, b) => b.length - a.length);
+  const big = clusters.filter(c => c.length >= 4);
+  const small = clusters.filter(c => c.length < 4).flat();
+  S.clusters = big.map((members, i) => {
+    const rank = n => n.group === "Categories" ? 3 : n.group === "Projects" ? 2 : n.group === "People" || n.group === "Meetings" ? 0 : 1;
+    const named = [...members].sort((a, b) => rank(b) - rank(a) || b.deg - a.deg)[0];
+    return { id:i, name:named.title, members, color:CLUSTER_PALETTE[i % CLUSTER_PALETTE.length] };
+  });
+  S.nodes.forEach(n => n.cluster = -1);
+  S.clusters.forEach(c => c.members.forEach(n => n.cluster = c.id));
+  // small fragments & dailies & ghosts adopt majority neighbour cluster
+  const adopt = n => { const cnt = new Map(); S.adj.get(n).forEach(x => { if (x.cluster >= 0) cnt.set(x.cluster, (cnt.get(x.cluster) || 0) + 1); }); let best = -1, bv = 0; cnt.forEach((v, k) => { if (v > bv) { bv = v; best = k; } }); return best; };
+  small.forEach(n => n.cluster = adopt(n));
+  S.nodes.filter(n => n.ghost || n.group === S.dailyGroup).forEach(n => n.cluster = adopt(n));
+  S.clusters.forEach(c => c.size = S.nodes.filter(n => n.cluster === c.id).length);
+
+  // betweenness on idea graph
+  const nb = core.map(n => [...S.adj.get(n)].filter(x => idx.has(x)).map(x => idx.get(x)));
+  const cb = betweenness(core, nb, core.length > 1500 ? 220 : 0);
+  const maxCb = Math.max(1, ...cb);
+  S.nodes.forEach(n => n.bc = 0);
+  core.forEach((n, i) => n.bc = cb[i] / maxCb);
+
+  // hubs
+  const ranked = S.nodes.filter(n => !n.ghost).sort((a, b) => b.deg - a.deg);
+  const hubCount = Math.max(8, Math.min(18, Math.round(ranked.length * 0.035)));
+  S.nodes.forEach(n => n.isHub = false);
+  ranked.slice(0, hubCount).forEach(n => n.isHub = n.deg >= 3);
+}
+
+/* =========================================================
+   3. SIMULATION + RENDER
+   ========================================================= */
+const stage = document.getElementById("stage");
+const canvas = document.getElementById("cv");
+const ctx = canvas.getContext("2d");
+let DPR = Math.min(2, window.devicePixelRatio || 1);
+const radius = n => n.ghost ? 2.6 * S.settings.size : (2.4 + Math.sqrt(n.deg) * 1.45) * S.settings.size;
+const colorOf = n => {
+  if (n.ghost) return C.ghost;
+  if (S.colorMode === "cluster") return n.cluster >= 0 ? S.clusters[n.cluster].color : C.other;
+  return S.groupColor[n.group] || C.other;
+};
+
+const isDaily = n => n.group === S.dailyGroup;
+const anchorX = n => n.cluster >= 0 && S.anchors[n.cluster] ? S.anchors[n.cluster].x : 0;
+const anchorY = n => n.cluster >= 0 && S.anchors[n.cluster] ? S.anchors[n.cluster].y : 0;
+const anchorK = n => n.cluster >= 0 ? S.settings.cluster * (isDaily(n) ? 0.6 : 1) : S.settings.cluster * 0.35;
+const linkStrength = l => (0.9 / Math.min(l.source.deg || 1, l.target.deg || 1) + 0.04) * (isDaily(l.source) || isDaily(l.target) ? 0.3 : 1) * (l.source.cluster !== l.target.cluster ? 0.35 : 1);
+const sim = d3.forceSimulation()
+  .force("link", d3.forceLink().distance(l => linkDist(l)).strength(linkStrength))
+  .force("charge", d3.forceManyBody().strength(n => -S.settings.repel * (0.6 + Math.min(n.deg, 40) / 14)).distanceMax(520).theta(0.95))
+  .force("x", d3.forceX(anchorX).strength(anchorK))
+  .force("y", d3.forceY(anchorY).strength(anchorK))
+  .force("collide", d3.forceCollide(n => radius(n) + 1.6).iterations(1))
+  .alphaDecay(0.022).velocityDecay(0.38)
+  .stop()
+  .on("tick", () => {
+    requestDraw();
+    if (S.autoFit && sim.alpha() < 0.06) { S.autoFit = false; fitTo(S.visNodes, 900); }
+  });
+function linkDist(l){
+  const d = S.settings.dist;
+  const hubby = Math.max(l.source.deg, l.target.deg);
+  return d + Math.min(hubby, 40) * 0.9 + (l.source.cluster !== l.target.cluster ? d * 0.8 : 0);
+}
+function computeAnchors(){
+  // golden-angle spiral: biggest idea clusters sit near the middle, smaller ones orbit outward
+  const K = S.clusters.length;
+  const spread = (140 + Math.sqrt(S.nodes.length) * 17) * (S.settings.dist / 34) ** 0.5;
+  S.anchors = S.clusters.map((c, i) => {
+    const r = spread * Math.sqrt((i + 0.6) / Math.max(1, K));
+    const a = i * 2.39996 - Math.PI / 2;
+    return { x:Math.cos(a) * r * 1.25, y:Math.sin(a) * r };
+  });
+}
+function applyForces(){
+  computeAnchors();
+  sim.force("link").distance(l => linkDist(l)).strength(linkStrength);
+  sim.force("charge").strength(n => -S.settings.repel * (0.6 + Math.min(n.deg, 40) / 14));
+  sim.force("x").x(anchorX).strength(anchorK); sim.force("y").y(anchorY).strength(anchorK);
+  sim.force("collide").radius(n => radius(n) + 1.6);
+}
+
+function seedPositions(){
+  computeAnchors();
+  const R = mulberry32(3);
+  S.nodes.forEach(n => {
+    const ax = anchorX(n), ay = anchorY(n), spread = n.cluster >= 0 ? 50 : 260;
+    n.x = ax + (R() - .5) * spread;
+    n.y = ay + (R() - .5) * spread;
+    n.vx = n.vy = 0;
+  });
+}
+
+function rebuild(alpha = 0.4){
+  const prev = S.visSet;
+  let base = S.nodes.filter(n => n.day <= S.cutoff && !S.hidden.has(n.group) && (S.settings.orphans || n.deg > 0));
+  let set = new Set(base);
+  if (S.local && S.selected) {
+    const keep = new Set([S.selected]);
+    let frontier = [S.selected];
+    for (let d = 0; d < S.depth; d++) {
+      const next = [];
+      frontier.forEach(n => S.adj.get(n).forEach(m => { if (!keep.has(m) && (set.has(m))) { keep.add(m); next.push(m); } }));
+      frontier = next;
+    }
+    set = keep;
+  }
+  if (S.path) S.path.forEach(n => set.add(n));
+  S.visSet = set;
+  S.visNodes = S.nodes.filter(n => set.has(n));
+  S.visLinks = S.links.filter(l => set.has(l.source) && set.has(l.target));
+  // place newcomers next to a visible neighbour so the graph grows outward
+  S.visNodes.forEach(n => {
+    if (prev.has(n) && n.x != null) return;
+    if (n.x == null || S.playing) {
+      const nb = [...S.adj.get(n)].find(m => prev.has(m) && m.x != null);
+      if (nb) { n.x = nb.x + (Math.random() - .5) * 18; n.y = nb.y + (Math.random() - .5) * 18; n.vx = n.vy = 0; }
+      else if (n.x == null) { n.x = (Math.random() - .5) * 80; n.y = (Math.random() - .5) * 80; }
+    }
+  });
+  computePathEdges();
+  sim.nodes(S.visNodes);
+  sim.force("link").links(S.visLinks);
+  if (reduced && !S.playing) { sim.alpha(Math.max(alpha, .3)); for (let i = 0; i < 120; i++) sim.tick(); sim.stop(); requestDraw(); }
+  else sim.alpha(Math.max(sim.alpha(), alpha)).restart();
+  updateTimelineLabel();
+}
+
+function computePathEdges(){
+  S.pathEdges = new Set();
+  if (!S.path) return;
+  const pairs = new Set();
+  for (let i = 0; i < S.path.length - 1; i++) { pairs.add(S.path[i].id + "\u0001" + S.path[i + 1].id); pairs.add(S.path[i + 1].id + "\u0001" + S.path[i].id); }
+  S.visLinks.forEach(l => { if (pairs.has(l.source.id + "\u0001" + l.target.id)) S.pathEdges.add(l); });
+}
+
+/* ---- sprites for glow ---- */
+const spriteCache = new Map();
+function sprite(color){
+  if (spriteCache.has(color)) return spriteCache.get(color);
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const g = c.getContext("2d");
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, hexA(color, .75)); gr.addColorStop(.22, hexA(color, .28)); gr.addColorStop(.55, hexA(color, .07)); gr.addColorStop(1, hexA(color, 0));
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  spriteCache.set(color, c); return c;
+}
+
+let raf = 0;
+function requestDraw(){ if (!raf) raf = requestAnimationFrame(draw); }
+const widthCache = new Map();
+function textW(t){ let w = widthCache.get(t); if (w == null) { w = ctx.measureText(t).width; widthCache.set(t, w); } return w; }
+const trunc = (t, n) => t.length > n ? t.slice(0, n - 1) + "…" : t;
+
+function draw(){
+  raf = 0;
+  const now = performance.now();
+  const { w, h } = S, t = S.transform, k = t.k;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+  ctx.fillStyle = C.stage; ctx.fillRect(0, 0, w, h);
+  const vg = ctx.createRadialGradient(w * .5, h * .46, 0, w * .5, h * .46, Math.max(w, h) * .65);
+  vg.addColorStop(0, C.glow); vg.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, w, h);
+
+  ctx.setTransform(DPR * k, 0, 0, DPR * k, DPR * t.x, DPR * t.y);
+  const focus = S.hover || S.selected;
+  const strong = !!S.hover;
+  const N = focus ? S.adj.get(focus) : null;
+  const pathOn = !!S.path, M = S.matches;
+  const lit = n => {
+    if (focus && (n === focus || N.has(n))) return true;
+    if (pathOn && S.pathSet.has(n)) return true;
+    if (!focus && !pathOn && M) return M.has(n);
+    if (!focus && !pathOn) return true;
+    return false;
+  };
+  const dimming = !!(focus || pathOn || M);
+  const soft = dimming && !strong && !pathOn && !M; // only a selection: keep the overview readable
+  const dimA = strong ? .1 : pathOn ? .14 : (M && !focus) ? .12 : .5;
+
+  // ---- links
+  const lw = (0.5 + 0.35 * Math.min(k, 3)) / k;
+  ctx.lineWidth = lw;
+  ctx.strokeStyle = hexA(C.link, S.settings.linkAlpha * (dimming ? (strong ? .3 : soft ? .75 : .4) : 1));
+  ctx.beginPath();
+  const hi = [];
+  for (const l of S.visLinks) {
+    const s = l.source, tg = l.target;
+    if ((focus && (s === focus || tg === focus)) || S.pathEdges.has(l) || (!focus && !pathOn && M && M.has(s) && M.has(tg))) { hi.push(l); continue; }
+    ctx.moveTo(s.x, s.y); ctx.lineTo(tg.x, tg.y);
+  }
+  ctx.stroke();
+  for (const l of hi) {
+    const onPath = S.pathEdges.has(l);
+    const other = focus ? (l.source === focus ? l.target : l.source) : l.target;
+    ctx.strokeStyle = onPath ? C.ivory : hexA(colorOf(other), .78);
+    ctx.lineWidth = (onPath ? 2.4 : 1.25) / k;
+    ctx.beginPath(); ctx.moveTo(l.source.x, l.source.y); ctx.lineTo(l.target.x, l.target.y); ctx.stroke();
+    if (S.settings.arrows) arrow(l, ctx.strokeStyle, k);
+  }
+  if (S.settings.arrows && !dimming && k > 1.2) {
+    ctx.globalAlpha = Math.min(1, (k - 1.2) * 1.5) * .6;
+    for (const l of S.visLinks) arrow(l, hexA(C.link, .8), k);
+    ctx.globalAlpha = 1;
+  }
+
+  // ---- halos
+  ctx.globalCompositeOperation = "lighter";
+  for (const n of S.visNodes) {
+    if (n.ghost) continue;
+    const L = lit(n);
+    let a = 0;
+    if (n.isHub) a = dimming && !L ? (soft ? .3 : .05) : .55;
+    else if (dimming && L) a = .5;
+    else if (!dimming) a = .16;
+    else if (soft) a = .07;
+    if (!a) continue;
+    const r = radius(n) * (n.isHub ? 6 : 4.5);
+    ctx.globalAlpha = a;
+    ctx.drawImage(sprite(colorOf(n)), n.x - r, n.y - r, r * 2, r * 2);
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+
+  // ---- nodes
+  for (const n of S.visNodes) {
+    const r = radius(n);
+    ctx.globalAlpha = dimming && !lit(n) ? dimA : 1;
+    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    if (n.ghost) {
+      ctx.fillStyle = C.stage; ctx.fill();
+      ctx.setLineDash([2 / k, 1.6 / k]); ctx.lineWidth = 1.1 / k; ctx.strokeStyle = C.ghost; ctx.stroke(); ctx.setLineDash([]);
+    } else {
+      ctx.fillStyle = colorOf(n); ctx.fill();
+      if (n.isHub) { ctx.lineWidth = 0.8 / k; ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.stroke(); }
+    }
+  }
+  ctx.globalAlpha = 1;
+  if (S.pathSet) for (const n of S.path) { if (!S.visSet.has(n)) continue; ctx.beginPath(); ctx.arc(n.x, n.y, radius(n) + 2.4 / k, 0, Math.PI * 2); ctx.lineWidth = 1.3 / k; ctx.strokeStyle = C.ivory; ctx.stroke(); }
+  const sel = S.selected;
+  if (sel && S.visSet.has(sel)) {
+    const r = radius(sel);
+    ctx.lineWidth = 1.6 / k; ctx.strokeStyle = C.ivory;
+    ctx.beginPath(); ctx.arc(sel.x, sel.y, r + 3 / k, 0, Math.PI * 2); ctx.stroke();
+    const pulse = reduced ? 0 : (now % 2200) / 2200;
+    ctx.globalAlpha = .45 * (1 - pulse);
+    ctx.beginPath(); ctx.arc(sel.x, sel.y, r + (4 + pulse * 14) / k, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // ---- signal particles
+  let animate = false;
+  if (S.settings.particles && hi.length) {
+    animate = true;
+    ctx.globalCompositeOperation = "lighter";
+    for (const l of hi) {
+      const onPath = S.pathEdges.has(l);
+      const s = l.source, tg = l.target;
+      const len = Math.hypot(tg.x - s.x, tg.y - s.y) || 1;
+      const speed = 70 / len; // world units per second
+      const col = onPath ? C.ivory : colorOf(focus && l.source === focus ? l.target : l.source);
+      const cnt = onPath ? 3 : 2;
+      for (let i = 0; i < cnt; i++) {
+        const p = ((now / 1000) * speed * .9 + l.seed + i / cnt) % 1;
+        const x = s.x + (tg.x - s.x) * p, y = s.y + (tg.y - s.y) * p;
+        const pr = (onPath ? 2.2 : 1.6) / Math.sqrt(k);
+        ctx.globalAlpha = Math.sin(p * Math.PI) * .95;
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(x, y, pr, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  }
+  if (sel && !reduced) animate = true;
+
+  // ---- labels (screen space)
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawLabels(lit, dimming, focus, soft);
+
+  if (animate) requestDraw();
+}
+
+function arrow(l, color, k){
+  const s = l.source, t = l.target;
+  const dx = t.x - s.x, dy = t.y - s.y, len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;
+  const r = radius(t) + 1.5 / k;
+  const x = t.x - ux * r, y = t.y - uy * r, a = 4.5 / k, b = 2.2 / k;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - ux * a - uy * b, y - uy * a + ux * b); ctx.lineTo(x - ux * a + uy * b, y - uy * a - ux * b); ctx.closePath(); ctx.fill();
+}
+
+function drawLabels(lit, dimming, focus, soft){
+  const t = S.transform, k = t.k, L = S.settings.labels;
+  const M = S.matches;
+  const cands = [];
+  for (const n of S.visNodes) {
+    const isLit = lit(n);
+    if (dimming && !isLit && !(soft && n.isHub)) continue;
+    let pri, pill = false;
+    if (n === S.selected || n === S.hover) { pri = 1e8; pill = true; }
+    else if (S.pathSet && S.pathSet.has(n)) { pri = 1e7; pill = true; }
+    else if (focus && isLit) { pri = 1e6 + n.deg; }
+    else if (M && isLit && !focus) { pri = 1e6 + n.deg; }
+    else if (n.isHub) { pri = 1e5 + n.deg; pill = true; }
+    else {
+      const need = n.deg >= 8 ? 1.05 : n.deg >= 4 ? 1.6 : 2.5;
+      if (k * L < need) continue;
+      pri = n.deg;
+    }
+    cands.push([pri, n, pill]);
+  }
+  cands.sort((a, b) => b[0] - a[0]);
+  const placed = [];
+  const overlaps = b => placed.some(p => b[0] < p[0] + p[2] && b[0] + b[2] > p[0] && b[1] < p[1] + p[3] && b[1] + b[3] > p[1]);
+  ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  let drawn = 0;
+  for (const [pri, n, pill] of cands) {
+    if (drawn > 170) break;
+    const sx = t.applyX(n.x), sy = t.applyY(n.y);
+    if (sx < -120 || sx > S.w + 120 || sy < -30 || sy > S.h + 30) continue;
+    const r = radius(n) * k;
+    ctx.font = pill ? '500 11px "IBM Plex Mono", ui-monospace, monospace' : '400 10.5px "IBM Plex Mono", ui-monospace, monospace';
+    const txt = trunc(n.title, pill ? 34 : 30);
+    const tw = textW((pill ? "P" : "T") + txt) - textW(pill ? "P" : "T");
+    const padX = pill ? 7 : 2;
+    const bx = sx - tw / 2 - padX, by = sy + r + 5, bw = tw + padX * 2, bh = pill ? 18 : 14;
+    const box = [bx, by, bw, bh];
+    if (pri < 1e8 && overlaps(box)) continue;
+    placed.push(box); drawn++;
+    if (pill) {
+      const col = colorOf(n);
+      ctx.fillStyle = C.pill; roundRect(bx, by, bw, bh, 3); ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = n === S.selected ? C.ivory : hexA(col, .75); roundRect(bx + .5, by + .5, bw - 1, bh - 1, 3); ctx.stroke();
+      ctx.fillStyle = C.text; ctx.fillText(txt, bx + padX, by + bh / 2 + .5);
+    } else {
+      ctx.lineWidth = 3; ctx.strokeStyle = C.stage; ctx.lineJoin = "round";
+      ctx.strokeText(txt, bx + padX, by + bh / 2);
+      ctx.fillStyle = (focus || M) ? C.text : C.muted;
+      ctx.fillText(txt, bx + padX, by + bh / 2);
+    }
+  }
+}
+function roundRect(x, y, w, h, r){ ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+
+/* ---- interaction ---- */
+function nodeAt(sx, sy){
+  const [wx, wy] = S.transform.invert([sx, sy]);
+  const k = S.transform.k;
+  let best = null, bd = Infinity;
+  for (const n of S.visNodes) {
+    const d = Math.hypot(n.x - wx, n.y - wy), lim = radius(n) + 6 / k;
+    if (d < lim && d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
+const zoom = d3.zoom().scaleExtent([0.06, 12]).on("zoom", e => { S.transform = e.transform; if (e.sourceEvent) { S.userMoved = true; S.autoFit = false; } requestDraw(); hideTip(); });
+const drag = d3.drag().container(canvas)
+  .subject(e => { const n = nodeAt(e.x, e.y); return n ? { node:n, x:e.x, y:e.y } : null; })
+  .on("start", e => { const n = e.subject.node; if (!e.active) sim.alphaTarget(0.22).restart(); n.fx = n.x; n.fy = n.y; hideTip(); })
+  .on("drag", e => { const n = e.subject.node; const [wx, wy] = S.transform.invert([e.x, e.y]); n.fx = wx; n.fy = wy; requestDraw(); })
+  .on("end", e => { const n = e.subject.node; if (!e.active) sim.alphaTarget(0); n.fx = null; n.fy = null; if (reduced) setTimeout(() => sim.stop(), 900); });
+const zsel = d3.select(canvas);
+zsel.call(drag).call(zoom).on("dblclick.zoom", null);
+
+canvas.addEventListener("click", e => {
+  const r = canvas.getBoundingClientRect();
+  const n = nodeAt(e.clientX - r.left, e.clientY - r.top);
+  if (n) select(n); else if (S.selected) select(null);
+});
+canvas.addEventListener("dblclick", e => {
+  const r = canvas.getBoundingClientRect();
+  const n = nodeAt(e.clientX - r.left, e.clientY - r.top);
+  if (n) { select(n); setLocal(true); }
+});
+const tip = document.getElementById("tip");
+canvas.addEventListener("pointermove", e => {
+  if (e.pointerType !== "mouse" || e.buttons) return;
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const n = nodeAt(sx, sy);
+  if (n !== S.hover) { S.hover = n; canvas.classList.toggle("pointer", !!n); requestDraw(); }
+  if (n) showTip(n, sx, sy); else hideTip();
+});
+canvas.addEventListener("pointerleave", () => { if (S.hover) { S.hover = null; requestDraw(); } hideTip(); });
+function showTip(n, sx, sy){
+  tip.hidden = false;
+  const meta = n.ghost ? `chưa tạo · được nhắc ở ${n.inDeg} ghi chú` : `${n.group} · ${n.deg} liên kết${n.created ? " · " + n.created.slice(0, 10) : ""}`;
+  tip.innerHTML = `<b>${esc(n.title)}</b><span>${esc(meta)}</span>`;
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  let x = sx + 14, y = sy + 14;
+  if (x + tw > S.w - 8) x = sx - tw - 14;
+  if (y + th > S.h - 8) y = sy - th - 14;
+  tip.style.left = Math.max(6, x) + "px"; tip.style.top = Math.max(6, y) + "px";
+}
+function hideTip(){ tip.hidden = true; }
+
+function fitTo(list, dur = 650, pad = 46, maxK = 3){
+  if (!list.length || !S.w) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  if (list.length > 40) {
+    // robust bounds: ignore the few stray orphans the repulsion pushes to the edge
+    const xs = list.map(n => n.x).sort((a, b) => a - b), ys = list.map(n => n.y).sort((a, b) => a - b);
+    const q = (a, p) => a[Math.max(0, Math.min(a.length - 1, Math.round(p * (a.length - 1))))];
+    x0 = q(xs, .015) - 20; x1 = q(xs, .985) + 20; y0 = q(ys, .015) - 20; y1 = q(ys, .985) + 20;
+  } else list.forEach(n => { const r = radius(n); x0 = Math.min(x0, n.x - r); y0 = Math.min(y0, n.y - r); x1 = Math.max(x1, n.x + r); y1 = Math.max(y1, n.y + r); });
+  const k = Math.min(maxK, 0.95 * Math.min((S.w - pad * 2) / Math.max(1, x1 - x0), (S.h - pad * 2) / Math.max(1, y1 - y0)));
+  const T = d3.zoomIdentity.translate(S.w / 2 - k * (x0 + x1) / 2, S.h / 2 - k * (y0 + y1) / 2).scale(k);
+  if (dur && !reduced) zsel.transition().duration(dur).ease(d3.easeCubicInOut).call(zoom.transform, T);
+  else zsel.call(zoom.transform, T);
+}
+function centerOn(n, minK = 1.4){
+  const k = Math.max(S.transform.k, minK);
+  const T = d3.zoomIdentity.translate(S.w / 2 - k * n.x, S.h / 2 - k * n.y).scale(k);
+  if (!reduced) zsel.transition().duration(600).ease(d3.easeCubicInOut).call(zoom.transform, T);
+  else zsel.call(zoom.transform, T);
+}
+
+/* =========================================================
+   4. UI
+   ========================================================= */
+const $ = id => document.getElementById(id);
+function toast(msg){ const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 2600); }
+
+function select(n, opts = {}){
+  S.selected = n;
+  if (S.local) rebuild(0.5);
+  if (n && opts.center) {
+    if (!S.visSet.has(n)) { S.cutoff = S.maxDay; $("time").value = S.maxDay; S.hidden.delete(n.group); renderLegend(); rebuild(0.4); }
+    setTimeout(() => centerOn(n), S.local ? 220 : 0);
+  }
+  renderInspector();
+  requestDraw();
+}
+
+function renderStats(){
+  const real = S.nodes.filter(n => !n.ghost);
+  const orph = real.filter(n => n.deg === 0).length;
+  const ghosts = S.nodes.filter(n => n.ghost).length;
+  const nonDaily = real.filter(n => n.group !== S.dailyGroup).length || 1;
+  const items = [
+    ["Ghi chú", real.length.toLocaleString("vi-VN"), ""],
+    ["Liên kết", S.links.length.toLocaleString("vi-VN"), ""],
+    ["Cụm ý tưởng", S.clusters.length, ""],
+    ["Liên kết / ghi chú", (S.links.length * 2 / Math.max(1, real.length)).toFixed(1), ""],
+    ["Mồ côi", orph, orph ? "warn" : ""],
+    ["Chưa tạo", ghosts, ghosts ? "bad" : ""]
+  ];
+  $("stats").innerHTML = items.map(([l, v, c]) => `<div class="stat ${c}"><b>${v}</b><span>${l}</span></div>`).join("");
+  $("vaultName").textContent = S.name + "/";
+  const chip = $("dataChip");
+  chip.textContent = S.sample ? "Dữ liệu mẫu" : "Vault của bạn";
+  chip.classList.toggle("mine", !S.sample);
+  $("resetSample").hidden = S.sample;
+}
+
+function renderLegend(){
+  const el = $("legend");
+  const tog = label => `<button type="button" data-legend-toggle aria-expanded="${!el.classList.contains("collapsed")}">${label} <span aria-hidden="true">${el.classList.contains("collapsed") ? "▸" : "▾"}</span></button>`;
+  if (S.colorMode === "folder") {
+    el.innerHTML = `<div class="lh">${tog("Thư mục")}<button type="button" data-legend-all>${S.hidden.size ? "hiện hết" : "ẩn hết"}</button></div>` +
+      S.groups.map(g => `<button type="button" data-group="${esc(g.name)}" class="${S.hidden.has(g.name) ? "off" : ""}" aria-pressed="${!S.hidden.has(g.name)}"><span class="dot ${g.name === "Chưa tạo" ? "hollow" : ""}" style="--c:${S.groupColor[g.name]}"></span><span>${esc(g.name)}</span><span class="n">${g.count}</span></button>`).join("");
+  } else {
+    const active = S.matchLabel;
+    el.innerHTML = `<div class="lh">${tog("Cụm · bấm để soi")}${S.matches && active.startsWith("cluster:") ? '<button type="button" data-cluster-clear>bỏ soi</button>' : ""}</div>` +
+      S.clusters.slice(0, 14).map(c => `<button type="button" data-cluster="${c.id}" aria-pressed="${active === "cluster:" + c.id}"><span class="dot" style="--c:${c.color}"></span><span>${esc(trunc(c.name, 22))}</span><span class="n">${c.size}</span></button>`).join("");
+  }
+}
+$("legend").addEventListener("click", e => {
+  if (e.target.closest("[data-legend-toggle]")) { const el = $("legend"); el.dataset.touched = "1"; el.classList.toggle("collapsed"); renderLegend(); return; }
+  const g = e.target.closest("[data-group]"), c = e.target.closest("[data-cluster]");
+  if (e.target.closest("[data-legend-all]")) {
+    if (S.hidden.size) S.hidden.clear(); else S.groups.forEach(x => S.hidden.add(x.name));
+    renderLegend(); rebuild(0.3); return;
+  }
+  if (e.target.closest("[data-cluster-clear]")) { setMatches(null, ""); renderLegend(); return; }
+  if (g) { const name = g.dataset.group; S.hidden.has(name) ? S.hidden.delete(name) : S.hidden.add(name); renderLegend(); rebuild(0.3); }
+  if (c) {
+    const id = +c.dataset.cluster;
+    if (S.matchLabel === "cluster:" + id) setMatches(null, "");
+    else { const set = new Set(S.nodes.filter(n => n.cluster === id)); setMatches(set, "cluster:" + id); fitTo([...set].filter(n => S.visSet.has(n)), 650, 60, 2.2); }
+    renderLegend();
+  }
+});
+function setMatches(set, label){ S.matches = set; S.matchLabel = label; if (!label.startsWith("day:")) document.querySelectorAll(".cells button[aria-pressed=true]").forEach(b => b.setAttribute("aria-pressed", "false")); requestDraw(); }
+
+function dotHtml(n){ return `<span class="dot ${n.ghost ? "hollow" : ""}" style="--c:${colorOf(n)}"></span>`; }
+function linkItems(list){
+  if (!list.length) return `<p class="empty">Không có.</p>`;
+  const sorted = [...list].sort((a, b) => b.deg - a.deg);
+  return `<ul class="linklist">${sorted.map(n => `<li><button type="button" data-node="${esc(n.id)}">${dotHtml(n)}<span class="t">${esc(n.title)}</span><span class="d">${n.ghost ? "chưa tạo" : esc(n.group)}</span></button></li>`).join("")}</ul>`;
+}
+function renderInspector(){
+  const el = $("insp"), n = S.selected;
+  if (!n) {
+    $("inspMeta").textContent = "";
+    const top = S.nodes.filter(x => !x.ghost).sort((a, b) => b.deg - a.deg).slice(0, 6);
+    el.innerHTML = `<div class="sec"><h2 style="font-size:16px">Chưa chọn ghi chú nào</h2><p class="empty" style="margin-top:6px">Bấm một nút trên graph, hoặc bắt đầu từ các ghi chú nhiều liên kết nhất:</p></div>${linkItems(top)}`;
+    return;
+  }
+  const out = S.out.get(n), inn = S.inn.get(n);
+  const cl = n.cluster >= 0 ? S.clusters[n.cluster] : null;
+  $("inspMeta").textContent = n.ghost ? "chưa tạo" : `${n.deg} liên kết`;
+  const tags = (n.tags || []).filter(Boolean);
+  const props = [];
+  if (!n.ghost) props.push(["folder", n.path ? n.path.split("/").slice(0, -1).join("/") || "/" : n.group]);
+  if (n.created) props.push(["created", n.created.slice(0, 10)]);
+  if (n.role) props.push(["role", n.role]);
+  if (n.kind) props.push(["type", n.kind]);
+  if (tags.length) props.push(["tags", tags.map(t => "#" + t).join(" ")]);
+  if (n.words) props.push(["words", n.words.toLocaleString("vi-VN")]);
+  if (cl) props.push(["cụm", cl.name]);
+  if (!n.ghost) props.push(["cầu nối", (n.bc * 100).toFixed(0) + "/100"]);
+  el.innerHTML = `
+    <div class="sec" style="display:grid;gap:10px">
+      <div class="insp-top">
+        <span class="tag"><i style="--c:${colorOf(n)}${n.ghost ? ";background:transparent;border:1.5px dashed " + C.ghost : ""}"></i>${esc(n.ghost ? "Chưa tạo" : n.group)}</span>
+        ${n.stage ? `<span class="tag stage-${esc(n.stage)}">${esc(n.stage)}</span>` : ""}
+        ${n.isHub ? `<span class="tag" style="color:var(--ivory)">hub</span>` : ""}
+      </div>
+      <h2>${esc(n.title)}</h2>
+      ${n.ghost ? `<p class="excerpt">Ghi chú này được nhắc tới bằng [[liên kết]] nhưng chưa có file. Tạo nó để nối các ý đang treo.</p>` : ""}
+      ${props.length ? `<dl class="props"><span class="fm">---</span>${props.map(([k, v]) => `<dt>${esc(k)}:</dt><dd>${esc(v)}</dd>`).join("")}<span class="fm">---</span></dl>` : ""}
+      ${n.excerpt ? `<p class="excerpt">${esc(n.excerpt)}</p>` : ""}
+      <div class="row-btns">
+        <button class="btn" type="button" id="iLocal" aria-pressed="${S.local}">${S.local ? "Về graph toàn bộ" : "Xem graph cục bộ"}</button>
+        <button class="btn" type="button" id="iCenter">Đưa vào giữa</button>
+        ${n.ghost ? "" : `<button class="btn" type="button" id="iFrom">Tìm đường từ đây</button>`}
+      </div>
+    </div>
+    <div class="sec"><h3><span>Liên kết đi</span><span>${out.length}</span></h3>${linkItems(out)}</div>
+    <div class="sec"><h3><span>Liên kết ngược</span><span>${inn.length}</span></h3>${linkItems(inn)}</div>`;
+  $("iLocal").onclick = () => setLocal(!S.local);
+  $("iCenter").onclick = () => centerOn(n, 1.8);
+  const f = $("iFrom"); if (f) f.onclick = () => { $("pfA").value = n.title; $("pfB").focus(); };
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-node]");
+  if (b) { const n = S.byId.get(b.dataset.node); if (n) select(n, { center:true }); }
+});
+
+function setLocal(on){
+  if (on && !S.selected) { toast("Chọn một ghi chú trước để xem graph cục bộ."); return; }
+  S.local = on;
+  $("mLocal").setAttribute("aria-pressed", on); $("mGlobal").setAttribute("aria-pressed", !on);
+  rebuild(0.6);
+  setTimeout(() => fitTo(S.visNodes, 650, 60, on ? 2.6 : 3), reduced ? 0 : 380);
+  renderInspector();
+}
+$("mGlobal").onclick = () => setLocal(false);
+$("mLocal").onclick = () => setLocal(true);
+$("depth").onchange = e => { S.depth = +e.target.value; if (S.local) { rebuild(0.5); setTimeout(() => fitTo(S.visNodes, 600, 60, 2.6), 350); } };
+function setColorMode(m){
+  S.colorMode = m;
+  $("cFolder").setAttribute("aria-pressed", m === "folder"); $("cCluster").setAttribute("aria-pressed", m === "cluster");
+  if (S.matchLabel.startsWith("cluster:")) setMatches(null, "");
+  renderLegend(); renderPanels(); renderInspector(); requestDraw();
+}
+$("cFolder").onclick = () => setColorMode("folder");
+$("cCluster").onclick = () => setColorMode("cluster");
+
+/* settings */
+const sets = [["sRepel","oRepel","repel",v => v],["sDist","oDist","dist",v => v],["sCluster","oCluster","cluster",v => v.toFixed(3)],["sSize","oSize","size",v => v.toFixed(2) + "×"],["sLink","oLink","linkAlpha",v => Math.round(v * 100) + "%"],["sLabel","oLabel","labels",v => v.toFixed(2) + "×"]];
+sets.forEach(([id, out, key, fmt]) => {
+  const inp = $(id); inp.value = S.settings[key]; $(out).textContent = fmt(+inp.value);
+  inp.addEventListener("input", () => {
+    S.settings[key] = +inp.value; $(out).textContent = fmt(+inp.value);
+    if (["repel", "dist", "cluster", "size"].includes(key)) { applyForces(); sim.alpha(Math.max(sim.alpha(), .35)).restart(); if (reduced) { for (let i = 0; i < 80; i++) sim.tick(); sim.stop(); } }
+    requestDraw();
+  });
+});
+[["sParticles","particles"],["sArrows","arrows"],["sOrphans","orphans"]].forEach(([id, key]) => {
+  const c = $(id); c.checked = S.settings[key];
+  c.addEventListener("change", () => { S.settings[key] = c.checked; if (key === "orphans") rebuild(0.3); requestDraw(); });
+});
+$("btnSettings").onclick = () => { const p = $("settings"); p.hidden = !p.hidden; $("btnSettings").setAttribute("aria-expanded", !p.hidden); };
+$("zIn").onclick = () => zsel.transition().duration(250).call(zoom.scaleBy, 1.4);
+$("zOut").onclick = () => zsel.transition().duration(250).call(zoom.scaleBy, 1 / 1.4);
+$("zFit").onclick = () => fitTo(S.visNodes);
+
+/* search */
+const q = $("q");
+q.addEventListener("input", () => {
+  const v = norm(q.value.trim());
+  if (!v) { setMatches(null, ""); $("qCount").textContent = ""; return; }
+  const terms = v.split(/\s+/);
+  const set = new Set(S.nodes.filter(n => { const hay = norm(n.title + " " + (n.tags || []).join(" ") + " " + n.group); return terms.every(t => hay.includes(t.replace(/^#/, ""))); }));
+  setMatches(set, "search");
+  $("qCount").textContent = set.size;
+});
+q.addEventListener("keydown", e => {
+  if (e.key === "Enter" && S.matches && S.matches.size) {
+    const best = [...S.matches].sort((a, b) => b.deg - a.deg)[0];
+    select(best, { center:true });
+  }
+  if (e.key === "Escape") { q.value = ""; q.dispatchEvent(new Event("input")); q.blur(); }
+});
+
+/* timeline */
+const time = $("time");
+function updateTimelineLabel(){
+  $("timeDate").textContent = dayToDate(S.baseDate, S.cutoff);
+  const vis = S.visNodes.filter(n => !n.ghost).length;
+  $("timeCnt").textContent = `${vis} ghi chú · ${S.visLinks.length} liên kết đang hiện`;
+}
+time.addEventListener("input", () => { S.cutoff = +time.value; rebuild(0.25); });
+let playT = 0, lastStep = 0;
+function setPlaying(on){
+  S.playing = on;
+  if (on) S.autoFit = false;
+  $("playIco").innerHTML = on ? '<rect x="2" y="1.5" width="3" height="9" fill="currentColor"/><rect x="7" y="1.5" width="3" height="9" fill="currentColor"/>' : '<path d="M2.5 1.5l8 4.5-8 4.5z" fill="currentColor"/>';
+  $("play").setAttribute("aria-label", on ? "Tạm dừng" : "Phát lại quá trình phát triển");
+  if (on) {
+    if (S.cutoff >= S.maxDay) { S.cutoff = Math.min(6, S.maxDay); time.value = S.cutoff; S.visSet = new Set(); rebuild(0.8); fitTo(S.visNodes, 0); }
+    lastStep = performance.now();
+    const stepMs = Math.max(16, Math.min(90, 12000 / Math.max(1, S.maxDay)));
+    const stepDays = Math.max(1, Math.round(S.maxDay / 400));
+    const loop = now => {
+      if (!S.playing) return;
+      if (now - lastStep > stepMs) {
+        lastStep = now;
+        S.cutoff = Math.min(S.maxDay, S.cutoff + stepDays); time.value = S.cutoff;
+        rebuild(0.32);
+        if (S.cutoff % 10 === 0) fitTo(S.visNodes, 900, 50, 2.4);
+        if (S.cutoff >= S.maxDay) { setPlaying(false); fitTo(S.visNodes, 900); return; }
+      }
+      playT = requestAnimationFrame(loop);
+    };
+    playT = requestAnimationFrame(loop);
+  } else cancelAnimationFrame(playT);
+}
+$("play").onclick = () => setPlaying(!S.playing);
+
+/* path finder */
+function findTitle(v){
+  const t = norm(v.trim()); if (!t) return null;
+  return S.nodes.find(n => norm(n.title) === t) || S.nodes.filter(n => norm(n.title).includes(t)).sort((a, b) => b.deg - a.deg)[0] || null;
+}
+function shortestPath(a, b, skipDaily){
+  const prev = new Map([[a, null]]), qq = [a];
+  while (qq.length) {
+    const v = qq.shift();
+    if (v === b) break;
+    for (const w of S.adj.get(v)) {
+      if (prev.has(w)) continue;
+      if (skipDaily && w !== b && (w.group === S.dailyGroup || w.ghost)) continue;
+      prev.set(w, v); qq.push(w);
+    }
+  }
+  if (!prev.has(b)) return null;
+  const path = []; for (let v = b; v; v = prev.get(v)) path.unshift(v);
+  return path;
+}
+function runPath(a, b){
+  const out = $("pfOut");
+  if (!a || !b) { out.innerHTML = `<p class="pathres">Không tìm thấy ghi chú với tên đó. Gõ vài chữ rồi chọn trong danh sách gợi ý.</p>`; return; }
+  if (a === b) { out.innerHTML = `<p class="pathres">Hai ô đang là cùng một ghi chú.</p>`; return; }
+  const p = shortestPath(a, b, $("pfSkipDaily").checked);
+  if (!p) { clearPath(); out.innerHTML = `<p class="pathres">Hai ghi chú này chưa nối với nhau${$("pfSkipDaily").checked ? " nếu không đi qua Daily" : ""}. Đây là chỗ đáng viết một ghi chú cầu nối.</p>`; return; }
+  S.path = p; S.pathSet = new Set(p);
+  rebuild(0.3);
+  out.innerHTML = `<p class="pathres">${p.length - 1} bước · qua ${p.length - 2} ghi chú trung gian</p><div class="chain">${p.map((n, i) => `${i ? '<span class="ar">→</span>' : ""}<button type="button" data-node="${esc(n.id)}" title="${esc(n.title)}"><i style="--c:${colorOf(n)}"></i>${esc(trunc(n.title, 32))}</button>`).join("")}</div>`;
+  $("pfClear").hidden = false;
+  setTimeout(() => fitTo(p, 750, 70, 2.2), reduced ? 0 : 120);
+  requestDraw();
+}
+function clearPath(){ S.path = null; S.pathSet = null; S.pathEdges = new Set(); $("pfClear").hidden = true; $("pfOut").innerHTML = ""; rebuild(0.2); }
+$("pfGo").onclick = () => runPath(findTitle($("pfA").value), findTitle($("pfB").value));
+$("pfClear").onclick = clearPath;
+$("pfRandom").onclick = () => {
+  const pool = S.nodes.filter(n => !n.ghost && n.group !== S.dailyGroup && n.deg > 1 && n.group !== "Categories");
+  for (let tries = 0; tries < 40; tries++) {
+    const a = pool[Math.floor(Math.random() * pool.length)], b = pool[Math.floor(Math.random() * pool.length)];
+    if (a === b || a.cluster === b.cluster) continue;
+    const p = shortestPath(a, b, true);
+    if (p && p.length >= 4) { $("pfA").value = a.title; $("pfB").value = b.title; runPath(a, b); return; }
+  }
+};
+[$("pfA"), $("pfB")].forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") $("pfGo").click(); }));
+
+/* lower panels */
+function barRow(n, v, max, sub){
+  return `<li><button type="button" data-node="${esc(n.id)}"><span class="t" title="${esc(n.title)}"><i style="--c:${colorOf(n)}"></i>${esc(n.title)}</span><span class="track"><span class="fill" style="width:${Math.max(3, v / max * 100)}%;--c:${colorOf(n)};display:block"></span></span><span class="v">${sub}</span></button></li>`;
+}
+function renderPanels(){
+  const real = S.nodes.filter(n => !n.ghost);
+  const hubs = [...real].sort((a, b) => b.deg - a.deg).slice(0, 10);
+  const maxD = hubs[0] ? hubs[0].deg : 1;
+  $("hubs").innerHTML = hubs.map(n => barRow(n, n.deg, maxD, n.deg)).join("");
+
+  const br = real.filter(n => n.bc > 0 && n.group !== "Categories").sort((a, b) => b.bc - a.bc).slice(0, 8);
+  const maxB = br[0] ? br[0].bc : 1;
+  $("bridges").innerHTML = br.length ? br.map(n => {
+    const cl = new Set([...S.adj.get(n)].map(x => x.cluster).filter(c => c >= 0));
+    return barRow(n, n.bc, maxB, cl.size + " cụm");
+  }).join("") : `<li class="empty">Chưa đủ liên kết để tính.</li>`;
+
+  // heatmap: 26 weeks ending at the latest note
+  const counts = new Map();
+  real.forEach(n => counts.set(n.day, (counts.get(n.day) || 0) + 1));
+  const endDate = new Date(dayToDate(S.baseDate, S.maxDay) + "T00:00:00Z");
+  const endDow = (endDate.getUTCDay() + 6) % 7; // Monday=0
+  const weeks = 26;
+  const startDay = S.maxDay - endDow - (weeks - 1) * 7;
+  const cells = [], vals = [];
+  for (let i = 0; i < weeks * 7; i++) { const d = startDay + i; vals.push(d >= 0 && d <= S.maxDay ? (counts.get(d) || 0) : -1); }
+  const nz = vals.filter(v => v > 0).sort((a, b) => a - b);
+  const q = p => nz.length ? nz[Math.min(nz.length - 1, Math.floor(p * nz.length))] : 1;
+  const th = [q(.25), q(.5), q(.8)];
+  for (let i = 0; i < weeks * 7; i++) {
+    const v = vals[i], d = startDay + i;
+    if (v < 0) { cells.push(`<button type="button" class="pad" tabindex="-1" aria-hidden="true"></button>`); continue; }
+    const lvl = v === 0 ? "" : v <= th[0] ? "l1" : v <= th[1] ? "l2" : v <= th[2] ? "l3" : "l4";
+    const date = dayToDate(S.baseDate, d);
+    cells.push(`<button type="button" class="${lvl}" data-day="${d}" title="${date}: ${v} ghi chú" aria-label="${date}: ${v} ghi chú" aria-pressed="${S.matchLabel === "day:" + d}"></button>`);
+  }
+  $("cells").innerHTML = cells.join("");
+  // month labels
+  const months = []; let lastM = -1;
+  for (let w = 0; w < weeks; w++) {
+    const d = startDay + w * 7; const dt = new Date(dayToDate(S.baseDate, d) + "T00:00:00Z");
+    const m = dt.getUTCMonth(); if (m !== lastM && w < weeks - 2) { months.push(`<span style="left:${w / weeks * 100}%">Th${m + 1}</span>`); lastM = m; }
+  }
+  $("months").innerHTML = months.join("");
+  $("heatRange").textContent = "26 tuần";
+  // streak (days having a daily note, or any note when vault has no Daily folder)
+  const daysWith = new Set(real.filter(n => S.dailyGroup ? n.group === S.dailyGroup : true).map(n => n.day));
+  let best = 0, cur = 0; for (let d = 0; d <= S.maxDay; d++) { if (daysWith.has(d)) { cur++; best = Math.max(best, cur); } else cur = 0; }
+  const last30 = real.filter(n => n.day > S.maxDay - 30).length;
+  const activeDays = [...new Set(real.map(n => n.day))].length;
+  $("heatKpis").innerHTML = `<div><b>${last30}</b><span>30 ngày qua</span></div><div><b>${best}</b><span>Chuỗi dài nhất</span></div><div><b>${activeDays}</b><span>Ngày có ghi</span></div>`;
+
+  // care
+  const orph = real.filter(n => n.deg === 0).sort((a, b) => b.day - a.day);
+  $("orphN").textContent = orph.length;
+  $("orphans").innerHTML = orph.length ? orph.map(n => `<li><button type="button" data-node="${esc(n.id)}">${dotHtml(n)}<span class="t">${esc(n.title)}</span><span class="d">${esc(n.group)}</span></button></li>`).join("") : `<li class="empty">Không có ghi chú mồ côi.</li>`;
+  const gh = S.nodes.filter(n => n.ghost).sort((a, b) => b.inDeg - a.inDeg);
+  $("ghostN").textContent = gh.length;
+  $("ghosts").innerHTML = gh.length ? gh.map(n => `<li><button type="button" data-node="${esc(n.id)}">${dotHtml(n)}<span class="t">${esc(n.title)}</span><span class="d">${n.inDeg}× nhắc</span></button></li>`).join("") : `<li class="empty">Mọi liên kết đều trỏ tới ghi chú có thật.</li>`;
+
+  $("titles").innerHTML = real.filter(n => n.group !== S.dailyGroup).sort((a, b) => b.deg - a.deg).slice(0, 1500).map(n => `<option value="${esc(n.title)}"></option>`).join("");
+}
+$("cells").addEventListener("click", e => {
+  const b = e.target.closest("[data-day]"); if (!b) return;
+  const d = +b.dataset.day;
+  document.querySelectorAll(".cells button[aria-pressed=true]").forEach(x => x.setAttribute("aria-pressed", "false"));
+  if (S.matchLabel === "day:" + d) { setMatches(null, ""); return; }
+  const set = new Set(S.nodes.filter(n => n.day === d && !n.ghost));
+  b.setAttribute("aria-pressed", "true");
+  S.matches = set; S.matchLabel = "day:" + d; requestDraw();
+  toast(`${dayToDate(S.baseDate, d)}: ${set.size} ghi chú được sáng lên trên graph.`);
+});
+
+/* keyboard */
+document.addEventListener("keydown", e => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  if (e.key === "/" && !typing) { e.preventDefault(); q.focus(); return; }
+  if (typing) return;
+  if (e.key === "Escape") { if (S.path) clearPath(); else if (S.matches) { setMatches(null, ""); renderLegend(); } else if (S.local) setLocal(false); else select(null); }
+  if (e.key === "l" || e.key === "L") setLocal(!S.local);
+  if (e.key === "f" || e.key === "F") fitTo(S.visNodes);
+  if (e.key === " ") { e.preventDefault(); setPlaying(!S.playing); }
+});
+
+/* =========================================================
+   5. IMPORT (Obsidian vault folder / JSON)
+   ========================================================= */
+const MAX_FILES = 6000;
+function parseNote(path, text, lastModified){
+  const parts = path.split("/");
+  const fileName = parts[parts.length - 1];
+  const title = fileName.replace(/\.md$/i, "");
+  const folder = parts.length > 2 ? parts[1] : "Gốc";
+  let body = text, fm = "";
+  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  if (m) { fm = m[1]; body = text.slice(m[0].length); }
+  let created = null;
+  const cm = fm.match(/^(?:created|date|created_at|ngay)\s*:\s*["']?(\d{4}-\d{2}-\d{2})/mi);
+  if (cm) created = cm[1];
+  else { const fnDate = title.match(/(\d{4}-\d{2}-\d{2})/); created = fnDate ? fnDate[1] : (lastModified ? new Date(lastModified).toISOString().slice(0, 10) : null); }
+  const tags = new Set();
+  const tl = fm.match(/^tags\s*:\s*\[([^\]]*)\]/mi);
+  if (tl) tl[1].split(",").map(s => s.trim().replace(/^["'#]+|["']+$/g, "")).filter(Boolean).forEach(t => tags.add(t));
+  const tb = fm.match(/^tags\s*:\s*\r?\n((?:\s*-\s*.+\r?\n?)+)/mi);
+  if (tb) tb[1].split(/\r?\n/).map(s => s.replace(/^\s*-\s*/, "").trim().replace(/^["'#]+|["']+$/g, "")).filter(Boolean).forEach(t => tags.add(t));
+  const ts = fm.match(/^tags\s*:\s*([^\[\r\n][^\r\n]*)$/mi);
+  if (ts && !tb) ts[1].split(/[,\s]+/).map(s => s.replace(/^#/, "")).filter(Boolean).forEach(t => tags.add(t));
+  const bodyNoCode = body.replace(/```[\s\S]*?```/g, "").replace(/`[^`]*`/g, "");
+  for (const mm of bodyNoCode.matchAll(/(?:^|\s)#([\p{L}\p{N}_\/-]*[\p{L}_\/-][\p{L}\p{N}_\/-]*)/gu)) tags.add(mm[1]);
+  const links = [];
+  for (const mm of bodyNoCode.matchAll(/!?\[\[([^\]\|#\^]+)(?:[#\^][^\]\|]*)?(?:\|[^\]]*)?\]\]/g)) {
+    let target = mm[1].trim(); if (!target) continue;
+    const base = target.split("/").pop();
+    if (/\.(png|jpe?g|gif|svg|webp|pdf|mp4|mp3|canvas|excalidraw)$/i.test(base)) continue;
+    links.push(base.replace(/\.md$/i, ""));
+  }
+  for (const fmm of fm.matchAll(/\[\[([^\]\|#\^]+)(?:[#\^][^\]\|]*)?(?:\|[^\]]*)?\]\]/g)) links.push(fmm[1].trim().split("/").pop().replace(/\.md$/i, ""));
+  for (const mm of bodyNoCode.matchAll(/\]\(([^)\s]+\.md)\)/g)) { try { links.push(decodeURIComponent(mm[1]).split("/").pop().replace(/\.md$/i, "")); } catch(_) {} }
+  const plain = body.replace(/!?\[\[([^\]\|]+)(?:\|([^\]]*))?\]\]/g, (_, a, b) => b || a).replace(/[#>*_`~\-]+/g, " ").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/\s+/g, " ").trim();
+  const words = plain ? plain.split(" ").length : 0;
+  return { id:title, title, group:folder, created, tags:[...tags].slice(0, 12), excerpt:plain.slice(0, 260) + (plain.length > 260 ? "…" : ""), words, path:parts.slice(1).join("/"), _links:links };
+}
+function buildFromNotes(name, notes){
+  const byKey = new Map();
+  notes.forEach(n => { const k = n.title.toLowerCase(); if (!byKey.has(k)) byKey.set(k, n); });
+  const ghosts = new Map(), links = [];
+  notes.forEach(n => n._links.forEach(t => {
+    const k = t.toLowerCase();
+    let tgt = byKey.get(k);
+    if (!tgt) { tgt = ghosts.get(k); if (!tgt) { tgt = { id:"∅ " + t, title:t, ghost:true, created:n.created }; ghosts.set(k, tgt); } }
+    links.push({ source:n.id, target:tgt.id });
+  }));
+  notes.forEach(n => delete n._links);
+  // ensure unique ids when two folders share a filename
+  return { name, sample:false, nodes:[...notes, ...ghosts.values()], links };
+}
+async function importFileList(list){
+  const files = list.filter(f => /\.md$/i.test(f.path) && !/(^|\/)\.(obsidian|trash|git)\//.test(f.path)).slice(0, MAX_FILES);
+  if (!files.length) { toast("Không thấy file .md nào trong thư mục này. Hãy chọn đúng thư mục gốc của vault."); return; }
+  $("busy").hidden = false; $("busy").textContent = `Đang đọc ${files.length} ghi chú…`;
+  await new Promise(r => setTimeout(r, 30));
+  try {
+    const notes = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const text = await f.file.text();
+      notes.push(parseNote(f.path, text, f.file.lastModified));
+      if (i % 200 === 0) { $("busy").textContent = `Đang đọc ${i}/${files.length} ghi chú…`; await new Promise(r => setTimeout(r, 0)); }
+    }
+    const vault = files[0].path.split("/")[0] || "vault";
+    $("busy").textContent = "Đang dựng graph, tìm cụm và cầu nối…";
+    await new Promise(r => setTimeout(r, 20));
+    boot(buildFromNotes(vault, notes));
+    toast(`Đã nạp ${notes.length} ghi chú từ ${vault}/`);
+  } catch (err) {
+    toast("Không đọc được vault: " + err.message);
+  } finally { $("busy").hidden = true; }
+}
+$("dirInput").addEventListener("change", e => {
+  const list = [...e.target.files].map(f => ({ path:f.webkitRelativePath || f.name, file:f }));
+  importFileList(list); e.target.value = "";
+});
+$("jsonInput").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return; e.target.value = "";
+  try {
+    const data = JSON.parse(await f.text());
+    if (!Array.isArray(data.nodes) || !Array.isArray(data.links)) throw new Error("cần hai mảng nodes và links");
+    boot({ name:data.name || f.name.replace(/\.json$/i, ""), sample:false, nodes:data.nodes, links:data.links });
+    toast(`Đã nạp ${data.nodes.length} nút từ ${f.name}`);
+  } catch (err) { toast("File JSON không hợp lệ: " + err.message); }
+});
+$("copyJson").onclick = async () => {
+  const data = { name:S.name, nodes:S.nodes.map(n => ({ id:n.id, title:n.title, group:n.group, created:n.created, tags:n.tags, ghost:n.ghost || undefined, cluster:n.cluster >= 0 ? S.clusters[n.cluster].name : undefined })), links:S.links.map(l => ({ source:l.source.id, target:l.target.id })) };
+  const txt = JSON.stringify(data);
+  try { await navigator.clipboard.writeText(txt); toast(`Đã sao chép JSON (${S.nodes.length} nút, ${S.links.length} liên kết).`); }
+  catch (_) { toast("Trình duyệt chặn clipboard. Hãy thử lại sau khi bấm vào trang."); }
+};
+$("resetSample").onclick = () => { boot(buildSample()); toast("Đã quay về vault mẫu."); };
+
+// drag & drop folders
+const veil = $("veil");
+let dragDepth = 0;
+document.addEventListener("dragenter", e => { if ([...(e.dataTransfer?.types || [])].includes("Files")) { dragDepth++; veil.hidden = false; } });
+document.addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) veil.hidden = true; });
+document.addEventListener("dragover", e => { if ([...(e.dataTransfer?.types || [])].includes("Files")) e.preventDefault(); });
+document.addEventListener("drop", async e => {
+  e.preventDefault(); dragDepth = 0; veil.hidden = true;
+  const items = [...(e.dataTransfer?.items || [])];
+  const entries = items.map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+  if (entries.length === 1 && entries[0].isFile && /\.json$/i.test(entries[0].name)) {
+    const f = e.dataTransfer.files[0]; const dt = new DataTransfer(); dt.items.add(f); $("jsonInput").files = dt.files; $("jsonInput").dispatchEvent(new Event("change")); return;
+  }
+  const out = [];
+  const walk = async (entry, path) => {
+    if (out.length >= MAX_FILES) return;
+    if (entry.isFile) {
+      if (/\.md$/i.test(entry.name)) { const file = await new Promise((res, rej) => entry.file(res, rej)); out.push({ path:path + entry.name, file }); }
+    } else if (entry.isDirectory) {
+      if (/^\.(obsidian|trash|git)$/.test(entry.name)) return;
+      const reader = entry.createReader();
+      let batch;
+      do { batch = await new Promise((res, rej) => reader.readEntries(res, rej)); for (const ch of batch) await walk(ch, path + entry.name + "/"); } while (batch.length);
+    }
+  };
+  $("busy").hidden = false; $("busy").textContent = "Đang quét thư mục…";
+  try {
+    for (const en of entries) await walk(en, en.isDirectory ? "" : "vault/");
+  } catch (err) { $("busy").hidden = true; toast("Không đọc được thư mục: " + err.message); return; }
+  $("busy").hidden = true;
+  importFileList(out);
+});
+
+/* =========================================================
+   6. BOOT
+   ========================================================= */
+function resize(){
+  const r = stage.getBoundingClientRect();
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  S.w = Math.max(1, r.width); S.h = Math.max(1, r.height);
+  canvas.width = Math.round(S.w * DPR); canvas.height = Math.round(S.h * DPR);
+  if (!S.userMoved && S.visNodes.length) fitTo(S.visNodes, 0);
+  $("legend").classList.toggle("collapsed", S.w < 560 && !$("legend").dataset.touched);
+  requestDraw();
+}
+new ResizeObserver(resize).observe(stage);
+
+function boot(raw){
+  setPlaying(false);
+  loadGraph(raw);
+  time.max = S.maxDay; time.value = S.maxDay;
+  seedPositions();
+  S.visSet = new Set();
+  applyForces();
+  rebuild(1);
+  sim.stop();
+  for (let i = 0; i < (S.nodes.length > 1500 ? 140 : 260); i++) sim.tick();
+  resize();
+  fitTo(S.visNodes, 0, 40);
+  S.userMoved = false;
+  if (!reduced) { S.autoFit = true; sim.alpha(0.3).restart(); }
+  // open on the strongest bridge idea so the inspector has something real to show
+  const ideas = S.nodes.filter(n => !n.ghost && !isDaily(n) && !["Categories", "People", "Meetings", "Projects"].includes(n.group));
+  const first = (ideas.find(n => n.group === "Notes") ? ideas.filter(n => n.group === "Notes") : ideas).sort((a, b) => (b.bc + b.deg / 40) - (a.bc + a.deg / 40))[0] || null;
+  S.selected = first;
+  renderStats(); renderLegend(); renderPanels(); renderInspector();
+  $("pfA").value = ""; $("pfB").value = ""; $("pfOut").innerHTML = ""; $("pfClear").hidden = true;
+  q.value = ""; $("qCount").textContent = "";
+  widthCache.clear();
+  requestDraw();
+}
+
+resize();
+boot(buildSample());
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { widthCache.clear(); requestDraw(); });
+})();
+</script>
+</body>
+</html>
